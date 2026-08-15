@@ -1,0 +1,3 @@
+{"type":"function_call","name":"Bash","arguments":{"command":"pwd"},"timestamp":"2026-08-15T07:23:00Z"}
+{"type":"function_call_output","call_id":"call_1","output":"/tmp","timestamp":"2026-08-15T07:23:01Z"}
+{"type":"exec_command_end","command":"pwd","exit_code":0,"timestamp":"2026-08-15T07:23:02Z"}

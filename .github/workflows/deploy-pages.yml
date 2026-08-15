@@ -1,0 +1,52 @@
+name: Deploy TRACE Landing Page
+
+# Deploys on every push to main. A path filter on 'site/**' was previously
+# used, but it silently skips the deploy whenever main's history is rewritten
+# (the push event's before-SHA is then unrelated), leaving a stale site.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # site/docs/ is generated from docs/*.md and deliberately not committed,
+      # so it has to be built here or the site's Docs links 404.
+      - name: Build docs pages
+        run: |
+          python -m pip install --quiet markdown-it-py pygments
+          python site/build_docs.py
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

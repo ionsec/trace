@@ -1,0 +1,97 @@
+name: TRACE.AI.Binary.macOS
+description: |
+  TRACE — Download and run the TRACE Go binary on macOS endpoints,
+  capturing its output for fleet-wide shadow-AI detection.
+
+  This artifact auto-downloads the macOS TRACE binary from the official
+  GitHub release (Hayabusa-style `tools:` + `Generic.Utils.FetchBinary`),
+  then runs it and captures:
+  - `discover` output — detected shadow-AI tools
+  - `scan` output — quick risk summary with system info + timestamp
+  - `run` output — one-shot deep sweep (discover → collect → HTML+JSON)
+
+  The binary is fetched from https://github.com/ionsec/trace/releases and
+  verified against its SHA-256 before execution. If the endpoint already has
+  a TRACE binary at BinaryPath, that is used instead of downloading.
+
+  Version: 1.0.1
+  Reference: https://github.com/ionsec/trace
+  License: AGPL-3.0-or-later
+
+type: CLIENT
+parameters:
+  - name: BinaryPath
+    description: Local path to an existing TRACE binary (used if present)
+    type: string
+    default: /usr/local/bin/trace
+  - name: Command
+    description: TRACE subcommand to run (discover, scan, or run)
+    type: string
+    default: scan
+  - name: OutputDir
+    description: Output directory for the run command (collect + reports)
+    type: string
+    default: /tmp/trace_evidence
+  - name: DeepCollection
+    description: Pass --deep to collect (session data, larger scope)
+    type: bool
+    default: false
+
+tools:
+  - name: TRACE_DARWIN
+    url: https://github.com/ionsec/trace/releases/latest/download/trace-darwin-arm64
+    hash: 0000000000000000000000000000000000000000000000000000000000000000
+
+sources:
+  - name: BinaryPresence
+    precondition: SELECT OS FROM info() WHERE OS = 'darwin'
+    query: |
+      -- Check if a local TRACE binary exists
+      LET local = SELECT OSPath FROM glob(globs=BinaryPath, accessor="file")
+      LET n = SELECT count() AS c FROM local
+      SELECT OSPath AS Path,
+             if(condition=n.c > 0, then="present", else="absent") AS Status,
+             "binary_presence" AS ArtifactType, "trace_binary" AS Platform
+      FROM local
+
+  - name: Discover
+    precondition: SELECT OS FROM info() WHERE OS = 'darwin'
+    query: |
+      -- Use an existing binary, or download the official macOS release
+      LET local = SELECT OSPath FROM glob(globs=BinaryPath, accessor="file")
+      LET n = SELECT count() AS c FROM local
+      LET fetched = SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="TRACE_DARWIN", IsExecutable=TRUE)
+      LET bin = SELECT OSPath FROM if(condition=n.c > 0, then=local, else=fetched)
+      LET out = SELECT Stdout, Stderr, ReturnCode
+        FROM execve(argv=[bin.OSPath, "discover"], length=1000000)
+      SELECT Stdout AS Output, Stderr AS Errors, ReturnCode AS ExitCode,
+             "discover_output" AS ArtifactType, "trace_binary" AS Platform
+      FROM out
+
+  - name: Scan
+    precondition: SELECT OS FROM info() WHERE OS = 'darwin'
+    query: |
+      -- Use an existing binary, or download the official macOS release
+      LET local = SELECT OSPath FROM glob(globs=BinaryPath, accessor="file")
+      LET n = SELECT count() AS c FROM local
+      LET fetched = SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="TRACE_DARWIN", IsExecutable=TRUE)
+      LET bin = SELECT OSPath FROM if(condition=n.c > 0, then=local, else=fetched)
+      LET out = SELECT Stdout, Stderr, ReturnCode
+        FROM execve(argv=[bin.OSPath, "scan"], length=1000000)
+      SELECT Stdout AS Output, Stderr AS Errors, ReturnCode AS ExitCode,
+             "scan_output" AS ArtifactType, "trace_binary" AS Platform
+      FROM out
+
+  - name: Run
+    precondition: SELECT OS FROM info() WHERE OS = 'darwin'
+    query: |
+      -- One-shot deep sweep: discover -> collect -> HTML+JSON reports
+      LET local = SELECT OSPath FROM glob(globs=BinaryPath, accessor="file")
+      LET n = SELECT count() AS c FROM local
+      LET fetched = SELECT OSPath FROM Artifact.Generic.Utils.FetchBinary(ToolName="TRACE_DARWIN", IsExecutable=TRUE)
+      LET bin = SELECT OSPath FROM if(condition=n.c > 0, then=local, else=fetched)
+      LET out = SELECT Stdout, Stderr, ReturnCode
+        FROM execve(argv=[bin.OSPath, "run", "-o", OutputDir], length=1000000)
+      SELECT Stdout AS Output, Stderr AS Errors, ReturnCode AS ExitCode,
+             "run_output" AS ArtifactType, "trace_binary" AS Platform
+      FROM out

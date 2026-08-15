@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Generated forensic evidence & reports (never commit)
+evidence_exports/
+sample_report.html
+TRACE_Report_*.html
+TRACE_Report_*.json
+TRACE_Report_*.stix.json
+CHAIN_OF_CUSTODY.json
+report.html
+report.json
+report.stix.json
+*.html.gz
+*.json.gz
+
+# Ad-hoc / scratch scripts (not part of the test suite)
+test_ai_ioc.py
+test_ai_ioc_extra.py
+
+# Internal plan documents (not for public release)
+FORENSIC_TOOL_PLAN.md
+*_PLAN.md
+
+# Generated site docs (built from docs/*.md by site/build_docs.py)
+site/docs/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3

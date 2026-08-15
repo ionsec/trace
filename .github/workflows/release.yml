@@ -1,0 +1,58 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  goreleaser:
+    name: Go binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build + cross-compile Go binaries
+        working-directory: go
+        run: |
+          mkdir -p release
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o release/trace-darwin-arm64 ./cmd/trace
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o release/trace-darwin-amd64 ./cmd/trace
+          GOOS=linux  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o release/trace-linux-amd64  ./cmd/trace
+          GOOS=linux  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o release/trace-linux-arm64  ./cmd/trace
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o release/trace-windows-amd64.exe ./cmd/trace
+          cd release
+          sha256sum trace-* > SHA256SUMS.txt
+
+      - name: Upload Go binaries to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: go/release/*
+          generate_release_notes: true
+
+  pypi:
+    name: PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

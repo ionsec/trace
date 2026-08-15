@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRACE — Forensic Report {{.ReportID}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+{{.CSS}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ===== Branding ===== -->
+<div class="brand">
+  <div class="brand-logo">TRACE</div>
+  <div class="brand-meta">
+    Forensic Report &middot; {{.ReportID}}<br>
+    Generated {{.GeneratedAt}} &middot; TRACE v{{.Version}}<br>
+    {{if .SourceOS}}Source OS: <code>{{.SourceOS}}</code> &middot; {{end}}
+    {{if .Hostname}}Host: <code>{{.Hostname}}</code> &middot; {{end}}
+    Evidence dir: <code>{{.EvidenceDir}}</code>
+  </div>
+</div>
+
+<!-- ===== Stat Strip ===== -->
+<div class="stats">
+  <div class="stat"><div class="stat-label">Risk Score</div><div class="stat-value" style="color:{{.RiskColor}}">{{.RiskScore}}<span style="font-size:.9rem">/100</span></div><div class="stat-sub">{{.RiskSeverity}}</div></div>
+  <div class="stat"><div class="stat-label">Files Collected</div><div class="stat-value accent">{{.TotalArtifacts}}</div><div class="stat-sub">evidence artifacts</div></div>
+  <div class="stat"><div class="stat-label">IOCs</div><div class="stat-value info">{{.TotalIOCs}}</div><div class="stat-sub">indicators of compromise</div></div>
+  <div class="stat"><div class="stat-label">Platforms</div><div class="stat-value">{{.PlatformCount}}</div><div class="stat-sub">{{.PlatformList}}</div></div>
+  <div class="stat"><div class="stat-label">Findings</div><div class="stat-value">{{.TotalFindings}}</div><div class="stat-sub">{{.CriticalCount}} critical &middot; {{.HighCount}} high</div></div>
+  <div class="stat"><div class="stat-label">Kill Chain</div><div class="stat-value {{if ge .KillChainDetected 3}}danger{{else}}accent{{end}}">{{.KillChainDetected}}<span style="font-size:.9rem">/{{.KillChainTotal}}</span></div><div class="stat-sub">stages detected</div></div>
+</div>
+
+<!-- ===== Tabs ===== -->
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="map">Attack Map</button>
+  <button class="tab-btn" data-tab="findings">Findings</button>
+  <button class="tab-btn" data-tab="iocs">IOCs</button>
+  <button class="tab-btn" data-tab="timeline">Timeline</button>
+  <button class="tab-btn" data-tab="mitre">MITRE</button>
+  <button class="tab-btn" data-tab="killchain">Kill Chain</button>
+  <button class="tab-btn" data-tab="actions">Actions</button>
+  <button class="tab-btn" data-tab="narratives">Narratives</button>
+  <button class="tab-btn" data-tab="correlation">Correlation</button>
+  <button class="tab-btn" data-tab="conversation">Conversation</button>
+  <button class="tab-btn" data-tab="secrethunt">Secret Hunt</button>
+  <button class="tab-btn" data-tab="risk">Risk</button>
+  <button class="tab-btn" data-tab="evidence">Evidence</button>
+  <button class="tab-btn" data-tab="appendix">Appendix</button>
+</nav>
+
+<!-- ===== OVERVIEW ===== -->
+<section class="tab-panel active" id="panel-overview">
+  <h2>Executive Summary</h2>
+  <div class="card"><div class="card-body">
+    <p>{{.SummaryText}}</p>
+    <p><strong>{{.RiskScore}}/100</strong> &mdash; {{.RiskInterpretation}}</p>
+    <div class="risk-meter"><div class="risk-fill" style="width:{{.RiskScore}}%;background:{{.RiskColor}}"></div></div>
+    <div class="badges">
+      {{range .Platforms}}<span class="badge">{{.}}</span>{{end}}
+      {{range .SeverityBadges}}<span class="badge sev-{{.Key}}">{{.Label}}: {{.Value}}</span>{{end}}
+    </div>
+  </div></div>
+
+  <h2>Charts &amp; Stats</h2>
+  <div class="charts">
+    <div class="chart-card">
+      <h4>Risk Score Gauge</h4>
+      <div class="radial gauge">
+        <div class="radial-ring" style="background:conic-gradient({{.RiskColor}} {{.RiskScore}}%,var(--surface3) 0)" role="img" aria-label="Risk score {{.RiskScore}} of 100">
+          <div class="radial-hole"><div class="radial-num">{{.RiskScore}}</div><div class="radial-sub">/ 100</div></div>
+        </div>
+      </div>
+      <div class="chart-legend"><span class="lg"><span class="sw" style="background:var(--danger)"></span>Critical</span><span class="lg"><span class="sw" style="background:var(--high)"></span>High</span><span class="lg"><span class="sw" style="background:var(--warning)"></span>Medium</span><span class="lg"><span class="sw" style="background:var(--info)"></span>Low</span></div>
+    </div>
+    <div class="chart-card">
+      <h4>Findings by Severity</h4>
+      {{if .TotalFindings}}<div class="hbars">{{range .SeverityBars}}
+        <div class="hbar"><div class="hbar-track"><div class="hbar-fill" style="width:{{.Pct}};background:{{.Color}}"></div><span class="hbar-name">{{.Label}}</span></div><span class="hbar-val">{{.Value}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No findings</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>Severity Distribution</h4>
+      {{if .DonutGradient}}
+      <div class="radial donut">
+        <div class="radial-ring" style="background:{{.DonutGradient}}" role="img" aria-label="Severity distribution across {{.TotalFindings}} findings">
+          <div class="radial-hole"><div class="radial-num">{{.TotalFindings}}</div></div>
+        </div>
+      </div>
+      {{else}}<p class="chart-empty">No findings</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>IOCs by Type</h4>
+      {{if .IOCBars}}<div class="hbars">{{range .IOCBars}}
+        <div class="hbar"><div class="hbar-track"><div class="hbar-fill" style="width:{{.Pct}};background:{{.Color}}"></div><span class="hbar-name">{{.Label}}</span></div><span class="hbar-val" style="min-width:44px">{{.Value}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No IOCs</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>Platform Inventory</h4>
+      {{if .PlatformBars}}<div class="hbars">{{range .PlatformBars}}
+        <div class="hbar"><div class="hbar-track"><div class="hbar-fill" style="width:{{.Pct}};background:{{.Color}}"></div><span class="hbar-name">{{.Label}}</span></div><span class="hbar-val">{{.Value}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No platforms detected</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>Timeline Activity</h4>
+      {{if .TimelineBars}}<div class="vbars">{{range .TimelineBars}}
+        <div class="vbar" title="{{.Label}}: {{.Value}} events"><div class="vbar-fill" style="height:{{.Pct}}"></div><span class="vbar-label">{{.Label}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No timeline events</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>MITRE ATT&amp;CK Techniques</h4>
+      {{if .MitreBars}}<div class="hbars">{{range .MitreBars}}
+        <div class="hbar"><div class="hbar-track"><div class="hbar-fill" style="width:{{.Pct}};background:{{.Color}}"></div><span class="hbar-name">{{.Label}}</span></div><span class="hbar-val">{{.Value}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No MITRE mappings</p>{{end}}
+    </div>
+    <div class="chart-card">
+      <h4>Enhanced Risk Categories</h4>
+      {{if .RiskCatBars}}<div class="hbars">{{range .RiskCatBars}}
+        <div class="hbar"><div class="hbar-track"><div class="hbar-fill" style="width:{{.Pct}};background:{{.Color}}"></div><span class="hbar-name">{{.Label}}</span></div><span class="hbar-val">{{.Value}}</span></div>{{end}}
+      </div>{{else}}<p class="chart-empty">No enhanced risk data</p>{{end}}
+    </div>
+  </div>
+
+  <h2>Top Priority Actions</h2>
+  {{if .TopActions}}{{range $i, $a := .TopActions}}
+  <div class="priority-action urgency-{{$a.Urgency}}">
+    <span class="action-number">#{{inc $i}}</span>
+    <span class="action-urgency" style="color:{{$a.Color}}">[{{$a.Urgency}}]</span>
+    <div class="action-text">{{$a.Action}}</div>
+  </div>
+  {{end}}{{else}}<p style="color:var(--text-dim)">No priority actions identified.</p>{{end}}
+</section>
+
+<!-- ===== ATTACK MAP ===== -->
+<section class="tab-panel" id="panel-map">
+  <h2>Attack Surface Map</h2>
+  <p style="color:var(--text-dim);font-size:.85rem">Interactive map of detected AI platforms. Node color reflects the highest-severity finding on that platform; connecting lines show cross-platform correlations. Click a node to inspect it.</p>
+  <div class="map-wrap">
+    <h3>Platform Correlation Map</h3>
+    <div class="map-legend">
+      <span class="lg"><span class="dot" style="background:var(--danger)"></span>Critical</span>
+      <span class="lg"><span class="dot" style="background:var(--high)"></span>High</span>
+      <span class="lg"><span class="dot" style="background:var(--warning)"></span>Medium</span>
+      <span class="lg"><span class="dot" style="background:var(--info)"></span>Low</span>
+      <span class="lg"><span class="dot" style="background:#888"></span>Info</span>
+      <span class="lg"><span style="color:var(--accent)">- - -</span> Correlation</span>
+    </div>
+    <svg id="attackMap" viewBox="0 0 800 420" role="img" aria-label="Attack surface map"></svg>
+    <div class="map-detail" id="mapDetail">
+      <div class="md-title" id="mdTitle">Select a platform node</div>
+      <div class="md-grid" id="mdGrid"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FINDINGS ===== -->
+<section class="tab-panel" id="panel-findings">
+  <h2>Findings</h2>
+  <div class="filter-bar">
+    <input type="text" id="findingsSearch" class="filter-input" placeholder="Filter findings…" oninput="filterFindings(this.value)">
+    <select id="findingsSeverity" class="filter-select" onchange="filterFindings(document.getElementById('findingsSearch').value)">
+      <option value="">All severities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+      <option value="info">Info</option>
+    </select>
+  </div>
+  {{if .Findings}}
+  <div id="findingsList">
+  {{range .Findings}}
+  <div class="card finding-card" data-severity="{{.Severity}}" data-text="{{.SearchText}}">
+    <div class="card-header" onclick="toggleCard(this)">
+      <span><span class="sev-{{.Severity}}">{{.SeverityLabel}}</span> &mdash; {{.Title}}</span>
+      <span class="toggle">[+]</span>
+    </div>
+    <div class="card-body collapsed">
+      <p>{{.Description}}</p>
+      {{if .Evidence}}<h4>Evidence</h4><ul>{{range .Evidence}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+      {{if .MITREAtlas}}<h4>MITRE ATLAS</h4><ul>{{range .MITREAtlas}}<li>{{.}}</li>{{end}}</ul>{{end}}
+      {{if .Recommendation}}<h4>Recommendation</h4><p>{{.Recommendation}}</p>{{end}}
+      <p style="font-size:.75rem;color:var(--text-dim)">ID: {{.ID}} &middot; Platform: {{.Platform}} &middot; Risk: {{.RiskScore}}</p>
+    </div>
+  </div>
+  {{end}}
+  </div>
+  <p id="findingsEmpty" style="color:var(--text-dim);display:none">No findings match the current filter.</p>
+  {{else}}<p style="color:var(--text-dim)">No findings recorded.</p>{{end}}
+</section>
+
+<!-- ===== IOCS ===== -->
+<section class="tab-panel" id="panel-iocs">
+  <h2>IOC Extractor Results</h2>
+  {{if .IOCs}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{.TotalIOCs}}</strong> indicators of compromise extracted.</p>
+    <table>
+      <tr><th>Type</th><th>Count</th></tr>
+      {{range .IOCSummary}}<tr><td><span style="font-family:var(--mono);color:var(--accent);font-size:.78rem">{{.Type}}</span></td><td>{{.Count}}</td></tr>{{end}}
+    </table>
+  </div></div>
+  <details>
+  <summary style="font-family:var(--mono);color:var(--accent);cursor:pointer;margin:1rem 0">Show top {{len .IOCs}} IOCs (of {{.TotalIOCs}} — full list in report.json)</summary>
+  <div class="card"><div class="card-body">
+    <table class="sortable" id="iocTable">
+      <tr><th data-sort="ioc_type">Type</th><th data-sort="value">Value</th><th data-sort="source">Source</th><th data-sort="severity">Severity</th></tr>
+      {{range .IOCs}}<tr><td><span style="font-family:var(--mono);color:var(--accent);font-size:.78rem">{{.IOCType}}</span></td><td><code>{{.Value}}</code></td><td>{{.SourceFile}}</td><td><span class="sev-{{.Severity}}">{{.Severity}}</span></td></tr>{{end}}
+    </table>
+  </div></div>
+  </details>
+  {{else}}<p style="color:var(--text-dim)">No IOCs extracted.</p>{{end}}
+</section>
+
+<!-- ===== TIMELINE ===== -->
+<section class="tab-panel" id="panel-timeline">
+  <h2>Event Timeline</h2>
+  {{if .Timeline}}
+  <div class="timeline">
+    {{range .Timeline}}
+    <div class="timeline-item"{{if .IsCollectionEvent}} style="opacity:0.55;font-style:italic"{{end}}>
+      <div class="timeline-ts">{{.Timestamp}}</div>
+      <div class="timeline-body">
+        <strong>{{.Platform}}</strong> &mdash; {{.Description}}
+        {{if .Severity}}<span class="sev-{{.Severity}}"> [{{.Severity}}]</span>{{end}}
+        {{if .ContentPreview}}<br><small style="color:var(--text-dim)">{{.ContentPreview}}</small>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{if .TimelineTruncated}}<p style="color:var(--text-dim);text-align:center;margin-top:1rem">Showing {{len .Timeline}} of {{.TimelineTotal}} events. See <code>report.json</code> for the full timeline.</p>{{end}}
+  {{else}}<p style="color:var(--text-dim)">No timeline events recorded.</p>{{end}}
+</section>
+
+<!-- ===== MITRE ===== -->
+<section class="tab-panel" id="panel-mitre">
+  <h2>MITRE ATLAS Mapping</h2>
+  {{if .AtlasSummary}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{.AtlasTotal}}</strong> ATLAS technique mappings.</p>
+    <table>
+      <tr><th>Technique ID</th><th>Technique Name</th><th>Count</th></tr>
+      {{range .AtlasSummary}}<tr><td><code>{{.TechniqueID}}</code></td><td>{{.TechniqueName}}</td><td>{{.Count}}</td></tr>{{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No MITRE ATLAS mappings available.</p>{{end}}
+
+  <h2 style="margin-top:2rem">MITRE ATT&amp;CK Mapping</h2>
+  {{if .MitreAttack}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{len .MitreAttack}}</strong> ATT&amp;CK technique mappings derived from evidence.</p>
+    <table>
+      <tr><th>Technique ID</th><th>Name</th><th>Tactic</th><th>Count</th><th>Evidence</th></tr>
+      {{range .MitreAttack}}<tr><td><code>{{.TechniqueID}}</code></td><td>{{.TechniqueName}}</td><td>{{.Tactic}}</td><td>{{.Count}}</td><td style="font-size:.78rem">{{.EvidenceText}}</td></tr>{{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No MITRE ATT&amp;CK mappings derived from available evidence.</p>{{end}}
+</section>
+
+<!-- ===== KILL CHAIN ===== -->
+<section class="tab-panel" id="panel-killchain">
+  <h2>Kill Chain Analysis</h2>
+  {{if .KillChain}}
+  <div style="margin:1rem 0">
+    <div class="kill-chain-bar">
+      {{range .KillChain}}
+      <div class="kill-chain-stage {{if .Detected}}detected{{end}} {{.StageID}}" title="{{.Stage}}{{if .Detected}}: Detected{{else}}: Not detected{{end}}">
+        {{.Short}}<br>{{if .Detected}}✓{{else}}—{{end}}
+      </div>
+      {{end}}
+    </div>
+    <p style="font-size:.8rem;color:var(--text-dim);margin-top:.3rem">{{.KillChainDetected}} of {{.KillChainTotal}} stages detected</p>
+  </div>
+  <div class="card"><div class="card-body">
+    <table>
+      <tr><th>Stage</th><th>Status</th><th>Evidence</th></tr>
+      {{range .KillChain}}
+      <tr><td><strong>{{.Stage}}</strong></td><td>{{if .Detected}}<span style="color:var(--danger)">✓ Detected</span>{{else}}<span style="color:var(--text-dim)">— Not detected</span>{{end}}</td><td>{{.EvidenceText}}</td></tr>
+      {{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No kill chain data available.</p>{{end}}
+</section>
+
+<!-- ===== ACTIONS ===== -->
+<section class="tab-panel" id="panel-actions">
+  <h2>Priority Actions</h2>
+  {{if .Actions}}{{range $i, $a := .Actions}}
+  <div class="priority-action urgency-{{$a.Urgency}}">
+    <span class="action-number">#{{inc $i}}</span>
+    <span class="action-urgency" style="color:{{$a.Color}}">[{{$a.Urgency}}]</span>
+    <div class="action-text">{{$a.Action}}</div>
+    {{if $a.Evidence}}<div style="font-size:.8rem;color:var(--text-dim);margin-top:.3rem">Evidence: {{range $a.Evidence}}<code>{{.}}</code> {{end}}</div>{{end}}
+  </div>
+  {{end}}{{else}}<p style="color:var(--text-dim)">No priority actions identified.</p>{{end}}
+</section>
+
+<!-- ===== NARRATIVES ===== -->
+<section class="tab-panel" id="panel-narratives">
+  <h2>Attack Narratives</h2>
+  {{if .Narratives}}{{range .Narratives}}
+  <div class="narrative-card">
+    <h4><span class="sev-{{.Severity}}">{{.SeverityLabel}}</span> &mdash; {{.Title}}</h4>
+    <div class="narrative-meta">
+      <span class="badge">Confidence: {{.Confidence}}</span>
+      {{range .KillChainStages}}<span class="badge sev-high">{{.}}</span>{{end}}
+    </div>
+    <p style="margin:.5rem 0"><strong>Affected platforms:</strong> {{.PlatformText}}</p>
+    <p style="font-size:.85rem">{{.Recommendation}}</p>
+    {{if .EvidenceRefs}}<p style="font-size:.8rem;color:var(--text-dim)">Evidence: {{range .EvidenceRefs}}<code>{{.}}</code> {{end}}</p>{{end}}
+    {{if .IOCRefs}}<p style="font-size:.8rem;color:var(--text-dim)">IOCs: {{range .IOCRefs}}<code>{{.}}</code> {{end}}</p>{{end}}
+  </div>
+  {{end}}{{else}}<p style="color:var(--text-dim)">No attack narratives identified.</p>{{end}}
+</section>
+
+<!-- ===== CORRELATION ===== -->
+<section class="tab-panel" id="panel-correlation">
+  <h2>Cross-Platform Correlation</h2>
+  {{if .Correlations}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{len .Correlations}}</strong> cross-platform correlation(s) detected.</p>
+    <table>
+      <tr><th>Indicator</th><th>Type</th><th>Platforms</th><th>Severity</th></tr>
+      {{range .Correlations}}
+      <tr><td><code>{{.Indicator}}</code></td><td>{{.CorrelationType}}</td><td>{{range .Platforms}}<span class="corr-badge" style="background:var(--accent-bg);border:1px solid var(--accent)">{{.}}</span>{{end}}</td><td><span class="sev-{{.Severity}}">{{.Severity}}</span></td></tr>
+      {{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No cross-platform correlations detected.</p>{{end}}
+</section>
+
+<!-- ===== CONVERSATION ===== -->
+<section class="tab-panel" id="panel-conversation">
+  <h2>Conversation Forensics</h2>
+  {{if .Conversation.TotalSessions}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{.Conversation.TotalSessions}}</strong> conversation session(s) analyzed. <strong>{{.Conversation.JailbreakAttemptsTotal}}</strong> jailbreak attempt(s) detected. <strong>{{.Conversation.ToolCallsTotal}}</strong> tool call(s) recorded.</p>
+    {{range .Conversation.Sessions}}
+    <div class="conv-session">
+      <strong>{{.Platform}}</strong>
+      <span style="color:var(--text-dim);font-size:.85rem">&middot; Session: {{.SessionID}}</span>
+      {{if .JailbreakAttempts}}<span class="jailbreak-badge">⚠ {{.JailbreakAttempts}} jailbreak(s)</span>{{end}}
+      <br>
+      <span style="font-size:.82rem">Turns: {{.Turns}} &middot; User: {{.UserTurns}} &middot; Assistant: {{.AssistantTurns}} &middot; Tool calls: {{.ToolCalls}}</span>
+      <br>
+      <span style="font-size:.78rem;color:var(--text-dim)">Risk: {{.RiskAssessment}}</span>
+    </div>
+    {{end}}
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No conversation forensics data available.</p>{{end}}
+</section>
+
+<!-- ===== SECRET HUNT ===== -->
+<section class="tab-panel" id="panel-secrethunt">
+  <h2>Conversation Secret Hunt</h2>
+  {{if .SecretHunt}}
+  <div class="card"><div class="card-body">
+    <p><strong>{{.SecretHunt.Total}}</strong> secret finding(s) across <strong>{{.SecretHunt.FlaggedTurns}}</strong> turn(s), <strong>{{.SecretHunt.UniqueSecrets}}</strong> unique secret(s).</p>
+    {{if .SecretSeverities}}<div class="badges">{{range .SecretSeverities}}<span class="badge sev-{{.Key}}">{{.Label}}: {{.Value}}</span>{{end}}</div>{{end}}
+    {{if .SecretDirections}}<p style="font-size:.85rem;color:var(--text-dim)">Leak direction: {{range .SecretDirections}}<code>{{.Key}}</code> ({{.Value}}) {{end}}</p>{{end}}
+    <table>
+      <tr><th>Severity</th><th>Type</th><th>Redacted</th><th>Direction</th><th>Field</th><th>Platform</th><th>Session</th><th>Timestamp</th></tr>
+      {{range .SecretHunt.Findings}}
+      <tr>
+        <td><span class="sev-{{.Severity}}">{{.Severity}}</span></td>
+        <td><code>{{.SecretType}}</code></td>
+        <td><code>{{.Redacted}}</code></td>
+        <td>{{if .LeakDirection}}{{.LeakDirection}}{{else}}—{{end}}</td>
+        <td>{{.EvidenceField}}</td>
+        <td>{{.Platform}}</td>
+        <td style="font-size:.78rem">{{.SessionID}}</td>
+        <td style="font-size:.78rem">{{.Timestamp}}</td>
+      </tr>
+      {{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No conversation secret hunt data available. Run <code>trace analyze --secret-hunt</code> to scan conversation turns for leaked secrets.</p>{{end}}
+</section>
+
+<!-- ===== RISK ===== -->
+<section class="tab-panel" id="panel-risk">
+  <h2>Risk Assessment</h2>
+  <div class="card"><div class="card-body">
+    <p>Overall risk score: <strong>{{.RiskScore}}</strong> / 100 &mdash; {{.RiskInterpretation}}</p>
+    <div class="risk-meter"><div class="risk-fill" style="width:{{.RiskScore}}%;background:{{.RiskColor}}"></div></div>
+    {{if .RiskCategories}}
+    <h3 style="margin-top:1rem">Enhanced Risk Breakdown</h3>
+    <table>
+      <tr><th>Category</th><th>Score (0-25)</th><th>Level</th></tr>
+      {{range .RiskCategories}}
+      <tr><td>{{.Label}}</td><td>{{.Value}}</td><td><span class="sev-{{.Level}}">{{.LevelLabel}}</span></td></tr>
+      {{end}}
+    </table>
+    {{end}}
+  </div></div>
+</section>
+
+<!-- ===== EVIDENCE ===== -->
+<section class="tab-panel" id="panel-evidence">
+  <h2>Evidence Manifest</h2>
+  {{range .Artifacts}}
+  <div class="card">
+    <div class="card-header" onclick="toggleCard(this)">
+      <span>{{.ArtifactTypeUpper}} — {{.BaseName}}</span>
+      <span class="toggle">[+]</span>
+    </div>
+    <div class="card-body collapsed">
+      <table>
+        <tr><th style="width:30%">Property</th><th>Value</th></tr>
+        <tr><td>Original Path</td><td><code class="path">{{.OriginalPath}}</code></td></tr>
+        <tr><td>Platform</td><td>{{.Platform}}</td></tr>
+        <tr><td>Artifact Type</td><td>{{.ArtifactType}}</td></tr>
+        <tr><td>Source OS</td><td>{{.SourceOS}}</td></tr>
+        <tr><td>SHA-256</td><td><code>{{.SHA256}}</code></td></tr>
+        <tr><td>Size</td><td>{{.SizeText}}</td></tr>
+        <tr><td>Collected At</td><td>{{.CollectedAt}}</td></tr>
+        <tr><td>Collector Version</td><td>{{.CollectorVersion}}</td></tr>
+      </table>
+    </div>
+  </div>
+  {{end}}
+
+  <h2 style="margin-top:2rem">Platform Inventory</h2>
+  {{if .PlatformDetails}}
+  <div class="card"><div class="card-body">
+    <table>
+      <tr><th>Platform</th><th>Category</th><th>Artifacts</th><th>Findings</th><th>Max Severity</th></tr>
+      {{range .PlatformDetails}}<tr><td><strong>{{.Name}}</strong></td><td>{{.Category}}</td><td>{{.ArtifactCount}}</td><td>{{.FindingCount}}</td><td><span class="sev-{{.MaxSeverity}}">{{.MaxSeverity}}</span></td></tr>{{end}}
+    </table>
+  </div></div>
+  {{else}}<p style="color:var(--text-dim)">No platform inventory data available.</p>{{end}}
+</section>
+
+<!-- ===== APPENDIX ===== -->
+<section class="tab-panel" id="panel-appendix">
+  <h2>Appendices</h2>
+  <div class="card"><div class="card-body">
+    <h3>A. Chain of Custody</h3>
+    <p>Full chain-of-custody metadata stored in <code>CHAIN_OF_CUSTODY.json</code>.</p>
+    <table>
+      <tr><th>Key</th><th>Value</th></tr>
+      {{range .Custody}}<tr><td>{{.Key}}</td><td>{{.Value}}</td></tr>{{end}}
+    </table>
+    <h3 style="margin-top:1.5rem">B. Report Metadata</h3>
+    <table>
+      <tr><td>Report ID</td><td>{{.ReportID}}</td></tr>
+      <tr><td>Generated</td><td>{{.GeneratedAt}}</td></tr>
+      <tr><td>Tool</td><td>TRACE v{{.Version}}</td></tr>
+      <tr><td>Evidence Dir</td><td>{{.EvidenceDir}}</td></tr>
+    </table>
+  </div></div>
+</section>
+
+<footer>
+  TRACE &mdash; Tool for Reconnaissance of AI &amp; Compute Evidence &mdash; {{.GeneratedAt}}
+</footer>
+
+</div><!-- /container -->
+
+<script>
+/* ===== Tab navigation ===== */
+(function(){
+  var btns = document.querySelectorAll('.tab-btn');
+  var panels = document.querySelectorAll('.tab-panel');
+  function activate(name){
+    btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
+    panels.forEach(function(p){ p.classList.toggle('active', p.id === 'panel-' + name); });
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ activate(b.getAttribute('data-tab')); });
+  });
+})();
+
+/* ===== Card toggle ===== */
+function toggleCard(header){
+  var body = header.nextElementSibling;
+  var toggle = header.querySelector('.toggle');
+  if(body.classList.contains('collapsed')){
+    body.classList.remove('collapsed');
+    toggle.textContent = '[-]';
+  } else {
+    body.classList.add('collapsed');
+    toggle.textContent = '[+]';
+  }
+}
+
+/* ===== Findings filter ===== */
+function filterFindings(query){
+  var q = (query || '').toLowerCase().trim();
+  var sev = document.getElementById('findingsSeverity').value;
+  var cards = document.querySelectorAll('.finding-card');
+  var visible = 0;
+  cards.forEach(function(card){
+    var text = card.getAttribute('data-text') || '';
+    var cardSev = card.getAttribute('data-severity') || '';
+    var show = (!q || text.indexOf(q) !== -1) && (!sev || cardSev === sev);
+    card.style.display = show ? '' : 'none';
+    if(show) visible++;
+  });
+  var empty = document.getElementById('findingsEmpty');
+  if(empty) empty.style.display = visible === 0 ? '' : 'none';
+}
+
+/* ===== Sortable tables ===== */
+(function(){
+  var sevRank = {critical:5, high:4, medium:3, low:2, info:1};
+  document.querySelectorAll('table.sortable').forEach(function(table){
+    table.querySelectorAll('th[data-sort]').forEach(function(th, idx){
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', function(){
+        var key = th.getAttribute('data-sort');
+        var tbody = table.querySelector('tbody') || table;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr')).filter(function(r){ return r.cells.length && r.cells[0].tagName === 'TD'; });
+        var asc = th.getAttribute('data-asc') !== '1';
+        rows.sort(function(a, b){
+          var av = a.cells[idx] ? a.cells[idx].textContent.trim() : '';
+          var bv = b.cells[idx] ? b.cells[idx].textContent.trim() : '';
+          if(key === 'severity'){ return (sevRank[av.toLowerCase()]||0) - (sevRank[bv.toLowerCase()]||0); }
+          return av.localeCompare(bv);
+        });
+        if(!asc) rows.reverse();
+        rows.forEach(function(r){ tbody.appendChild(r); });
+        th.setAttribute('data-asc', asc ? '1' : '0');
+      });
+    });
+  });
+})();
+
+/* ===== Interactive Attack Map ===== */
+var MAP_DATA = {{.MapDataJSON}};
+(function(){
+  var svg = document.getElementById('attackMap');
+  if(!svg) return;
+  var W = 800, H = 420;
+  var nodes = MAP_DATA.nodes || [];
+  var edges = MAP_DATA.edges || [];
+  var mdTitle = document.getElementById('mdTitle');
+  var mdGrid = document.getElementById('mdGrid');
+
+  if(nodes.length === 0){
+    mdTitle.textContent = 'No platforms detected';
+    return;
+  }
+
+  var cx = W / 2, cy = H / 2;
+  var radius = Math.min(W, H) / 2 - 70;
+  var positions = {};
+  if(nodes.length === 1){
+    positions[nodes[0].id] = {x: cx, y: cy};
+  } else {
+    nodes.forEach(function(n, i){
+      var ang = (i / nodes.length) * 2 * Math.PI - Math.PI / 2;
+      positions[n.id] = {x: cx + radius * Math.cos(ang), y: cy + radius * Math.sin(ang)};
+    });
+  }
+
+  var html = '';
+  edges.forEach(function(e, i){
+    var a = positions[e.source], b = positions[e.target];
+    if(!a || !b) return;
+    html += '<line class="map-edge" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'"/>';
+  });
+  nodes.forEach(function(n, i){
+    var p = positions[n.id];
+    var r = 26 + (n.risk_index || 0) * 4;
+    html += '<g class="map-node" data-id="'+n.id+'" data-index="'+i+'">';
+    html += '<circle cx="'+p.x+'" cy="'+p.y+'" r="'+r+'" fill="'+n.color+'" fill-opacity="0.18" stroke="'+n.color+'" stroke-width="2"/>';
+    html += '<text x="'+p.x+'" y="'+(p.y-2)+'" text-anchor="middle">'+n.name+'</text>';
+    html += '<text class="node-sub" x="'+p.x+'" y="'+(p.y+14)+'" text-anchor="middle">'+n.finding_count+' findings</text>';
+    html += '</g>';
+  });
+  svg.innerHTML = html;
+
+  function selectNode(idx){
+    var all = svg.querySelectorAll('.map-node');
+    var allEdges = svg.querySelectorAll('.map-edge');
+    all.forEach(function(g){ g.classList.remove('selected','dimmed'); });
+    allEdges.forEach(function(l){ l.classList.remove('highlight','dimmed'); });
+    if(idx === null){
+      mdTitle.textContent = 'Select a platform node';
+      mdGrid.innerHTML = '';
+      return;
+    }
+    var n = nodes[idx];
+    all[idx].classList.add('selected');
+    var connected = {};
+    connected[n.id] = true;
+    edges.forEach(function(e){
+      if(e.source === n.id) connected[e.target] = true;
+      if(e.target === n.id) connected[e.source] = true;
+    });
+    all.forEach(function(g){
+      if(!connected[g.getAttribute('data-id')]) g.classList.add('dimmed');
+    });
+    mdTitle.textContent = n.name + (n.category ? ' — ' + n.category : '');
+    mdGrid.innerHTML = [
+      ['Max Severity', n.max_severity],
+      ['Findings', n.finding_count],
+      ['Artifacts', n.artifact_count],
+      ['IOCs', n.ioc_count]
+    ].map(function(c){
+      return '<div class="md-cell"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div></div>';
+    }).join('');
+  }
+
+  svg.querySelectorAll('.map-node').forEach(function(g){
+    g.addEventListener('click', function(){ selectNode(parseInt(g.getAttribute('data-index'), 10)); });
+  });
+  svg.addEventListener('click', function(ev){ if(ev.target === svg) selectNode(null); });
+})();
+</script>
+</body>
+</html>

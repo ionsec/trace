@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_10","name":"Bash","input":{"command":"git status"}}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"checking repo"},{"type":"tool_use","id":"toolu_11","name":"Bash","input":{"command":"git log --oneline -3"}}]}}
