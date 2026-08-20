@@ -15,7 +15,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -91,6 +94,8 @@ func usage() {
 	fmt.Println()
 	ui.Header(" OPTIONS ", 68)
 	fmt.Println("  " + ui.Style(ui.Cyan, "-o, --output DIR") + "     evidence output directory (default: evidence)")
+	fmt.Println("       " + ui.Dim.S(`Windows: use C:\evidence or .\evidence — "/evidence" resolves`))
+	fmt.Println("       " + ui.Dim.S("against the current drive, not the path you typed"))
 	fmt.Println("  " + ui.Style(ui.Cyan, "-d, --deep") + "            deep collection (session data, larger scope)")
 	fmt.Println("  " + ui.Style(ui.Cyan, "--max-files N") + "         per-tool file cap (default: 200)")
 	fmt.Println("  " + ui.Style(ui.Cyan, "--format FMT") + "          report format: html|json|stix|all (default: all)")
@@ -143,10 +148,7 @@ func main() {
 // ---------------------------------------------------------------------------
 
 func cmdRun() {
-	evidenceDir := flagValue("o", "evidence")
-	if evidenceDir == "" {
-		evidenceDir = "evidence"
-	}
+	evidenceDir := evidenceDirFlag()
 
 	fmt.Print(banner())
 	ui.Header(" FULL SWEEP ", 68)
@@ -192,7 +194,7 @@ func cmdRun() {
 		ui.Style(ui.Green, "✓"),
 		ui.Style(ui.White, "Collection:"),
 		len(coc.Files), len(detections))
-	fmt.Printf("     %s %s\n", ui.Style(ui.Cyan, "custody:"), ui.Gray.S(evidenceDir+"/CHAIN_OF_CUSTODY.json"))
+	fmt.Printf("     %s %s\n", ui.Style(ui.Cyan, "custody:"), ui.Gray.S(filepath.Join(evidenceDir, "CHAIN_OF_CUSTODY.json")))
 	if len(coc.Truncations) > 0 {
 		fmt.Printf("  %s  %s %d platform(s) truncated (per-tool budget hit)\n",
 			ui.Style(ui.Yellow, "⚠"),
@@ -312,10 +314,7 @@ func cmdScan() {
 // ---------------------------------------------------------------------------
 
 func cmdCollect() {
-	evidenceDir := flagValue("o", "evidence")
-	if evidenceDir == "" {
-		evidenceDir = "evidence"
-	}
+	evidenceDir := evidenceDirFlag()
 	deep := hasFlag("deep")
 
 	sp := ui.NewSpinner("Collecting forensic artifacts (SHA-256 hashing)")
@@ -328,7 +327,8 @@ func cmdCollect() {
 	fmt.Printf("  %s %d artifact(s) from %d platform(s)\n",
 		ui.Style(ui.Green, "✓"),
 		len(coc.Files), len(detect.Discover()))
-	fmt.Printf("  %s %s\n", ui.Style(ui.Cyan, "custody:"), ui.Gray.S(evidenceDir+"/CHAIN_OF_CUSTODY.json"))
+	fmt.Printf("  %s %s\n", ui.Style(ui.Cyan, "evidence:"), ui.Gray.S(evidenceDir))
+	fmt.Printf("  %s %s\n", ui.Style(ui.Cyan, "custody:"), ui.Gray.S(filepath.Join(evidenceDir, "CHAIN_OF_CUSTODY.json")))
 	if len(coc.Truncations) > 0 {
 		fmt.Printf("  %s %d platform(s) truncated (per-tool budget hit)\n",
 			ui.Style(ui.Yellow, "⚠"), len(coc.Truncations))
@@ -341,10 +341,7 @@ func cmdCollect() {
 // ---------------------------------------------------------------------------
 
 func cmdReport() {
-	evidenceDir := flagValue("o", "evidence")
-	if evidenceDir == "" {
-		evidenceDir = "evidence"
-	}
+	evidenceDir := evidenceDirFlag()
 
 	coc, err := loadCustody(evidenceDir)
 	if err != nil {
@@ -376,13 +373,7 @@ func cmdReport() {
 // ---------------------------------------------------------------------------
 
 func cmdAnalyze() {
-	evidenceDir := flagValue("o", "evidence")
-	if evidenceDir == "" {
-		evidenceDir = "evidence"
-	}
-	if dir := positionalArg(); dir != "" {
-		evidenceDir = dir
-	}
+	evidenceDir := evidenceDirArg()
 
 	opts := analyze.Options{
 		MITREAtlas:  hasFlag("mitre-atlas"),
@@ -422,7 +413,7 @@ func cmdAnalyze() {
 		fmt.Printf("  %s %d finding(s) across %d turn(s), %d unique\n",
 			ui.Style(ui.Green, "Secret hunt:"), h.Total, h.FlaggedTurns, h.UniqueSecrets)
 	}
-	fmt.Printf("  %s %s\n", ui.Style(ui.Cyan, "results:"), ui.Gray.S(evidenceDir+"/analysis_results.json"))
+	fmt.Printf("  %s %s\n", ui.Style(ui.Cyan, "results:"), ui.Gray.S(filepath.Join(evidenceDir, "analysis_results.json")))
 }
 
 // ---------------------------------------------------------------------------
@@ -430,13 +421,7 @@ func cmdAnalyze() {
 // ---------------------------------------------------------------------------
 
 func cmdIRIS() {
-	evidenceDir := flagValue("o", "evidence")
-	if evidenceDir == "" {
-		evidenceDir = "evidence"
-	}
-	if dir := positionalArg(); dir != "" {
-		evidenceDir = dir
-	}
+	evidenceDir := evidenceDirArg()
 
 	cfg := iris.Config{
 		Host:     firstNonEmpty(flagValue("host", ""), os.Getenv("IRIS_HOST")),
@@ -486,7 +471,7 @@ func cmdIRIS() {
 
 func loadCustody(dir string) (model.ChainOfCustody, error) {
 	var coc model.ChainOfCustody
-	data, err := os.ReadFile(strings.TrimSuffix(dir, "/") + "/CHAIN_OF_CUSTODY.json")
+	data, err := os.ReadFile(filepath.Join(dir, "CHAIN_OF_CUSTODY.json"))
 	if err != nil {
 		return coc, err
 	}
@@ -494,6 +479,56 @@ func loadCustody(dir string) (model.ChainOfCustody, error) {
 		return coc, err
 	}
 	return coc, nil
+}
+
+// evidenceDirFlag resolves the -o / --output value to an absolute path.
+func evidenceDirFlag() string {
+	return resolveEvidenceDir(flagValue("o", "evidence"), os.Stderr)
+}
+
+// evidenceDirArg resolves the evidence directory for the commands that also
+// accept it as a positional argument, which wins over the flag.
+func evidenceDirArg() string {
+	dir := flagValue("o", "evidence")
+	if arg := positionalArg(); arg != "" {
+		dir = arg
+	}
+	return resolveEvidenceDir(dir, os.Stderr)
+}
+
+// resolveEvidenceDir turns a user-supplied output directory into an absolute
+// path, so every message TRACE prints names the real destination.
+//
+// This matters most on Windows: a rooted path with no drive letter — the
+// `-o /evidence` form the POSIX examples teach — is legal there, but it
+// resolves against the drive of the current working directory. Evidence then
+// lands in C:\evidence (or fails outright when the drive root is not writable
+// without elevation) while the analyst is looking somewhere else entirely.
+// Printing the resolved path, and warning about the driveless form, is what
+// keeps the destination unambiguous.
+func resolveEvidenceDir(dir string, warn io.Writer) string {
+	if dir == "" {
+		dir = "evidence"
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		// An unresolvable path is still usable; MkdirAll reports the real error.
+		return filepath.Clean(dir)
+	}
+	if runtime.GOOS == "windows" && driveless(dir) {
+		fmt.Fprintf(warn, "%s output path %q has no drive letter, so it resolves against the current drive: %s\n",
+			ui.Style(ui.Yellow, "⚠"), dir, abs)
+	}
+	return abs
+}
+
+// driveless reports whether a path is rooted but carries no volume, e.g.
+// "/evidence" or "\evidence" on Windows.
+func driveless(dir string) bool {
+	if filepath.VolumeName(dir) != "" {
+		return false
+	}
+	return strings.HasPrefix(dir, "/") || strings.HasPrefix(dir, `\`)
 }
 
 // flagValue returns the value for a flag like "-o value" / "--output value".

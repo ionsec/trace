@@ -273,6 +273,102 @@ _INDIRECT_INJECTION_PATTERNS: list[tuple[str, re.Pattern]] = [
 
 
 # ======================================================================
+# False-positive control
+# ======================================================================
+
+# Phrases that appear when a suspicious string is quoted in order to be refused
+# — anti-injection guidance, agent hardening text, or an analyst's own incident
+# note — rather than issued as an instruction. Prompt-injection hardening is now
+# routine in agent configuration, so without this check the tool flags the
+# control as the attack.
+#
+# Every marker names the string from the outside ("do not follow it",
+# "injection attempt"); phrasing an attacker would plausibly use is deliberately
+# absent, so a real attempt is not silenced.
+_DEFENSIVE_MARKERS: tuple[str, ...] = (
+    "prompt injection",
+    "injection attempt",
+    "anything resembling",
+    "looks like an instruction",
+    "do not follow it",
+    "do not follow them",
+    "don't follow it",
+    "do not obey it",
+    "never follow it",
+    "note it in your report",
+    "report it as",
+    "false positive",
+    "instead of following",
+)
+
+# Lead-ins that mark the match as a quoted example, but only immediately before it.
+_DEFENSIVE_LEADS: tuple[str, ...] = ("e.g.", "eg.", "such as", "for example", "like ")
+
+# How much text either side of a match is inspected for defensive framing, and
+# how far back a lead-in phrase still counts.
+_DEFENSIVE_WINDOW = 320
+_DEFENSIVE_LEAD_WINDOW = 48
+
+# Cap on how many locations one grouped finding carries. The occurrence count
+# stays exact while the list stays readable.
+_MAX_FINDING_LOCATIONS = 25
+
+# Optional analyst-maintained suppression list, read from the evidence directory::
+#
+#     {"suppress": [{"match": "ignore previous instructions",
+#                    "file": "CLAUDE.md",
+#                    "reason": "our own anti-injection guidance"}]}
+#
+# A rule needs "match", "file", or both; "match" is a case-insensitive substring
+# of the matched text and "file" of the source path. Suppression is an explicit
+# analyst decision, so suppressed matches are dropped rather than demoted.
+ALLOWLIST_FILE = "trace-allowlist.json"
+
+# Appended to a demoted finding's description, and stripped again if a genuine
+# match later shows up in the same artifact.
+_DEFENSIVE_NOTE = (
+    " Every match sits in defensive framing (the string is quoted in order to be"
+    " refused or reported), so this is most likely anti-injection text rather than"
+    " an attempt. Review before dismissing."
+)
+
+
+def _defensive_context(text: str, match: re.Match) -> bool:
+    """Report whether a match is framed as something to refuse or as an example.
+
+    This is the false-positive guard for hardening text that has to quote an
+    injection string in order to forbid it.
+    """
+    start = max(0, match.start() - _DEFENSIVE_WINDOW)
+    end = min(len(text), match.end() + _DEFENSIVE_WINDOW)
+    window = text[start:end].lower()
+    if any(marker in window for marker in _DEFENSIVE_MARKERS):
+        return True
+
+    lead = text[start:match.start()].lower()[-_DEFENSIVE_LEAD_WINDOW:]
+    return any(phrase in lead for phrase in _DEFENSIVE_LEADS)
+
+
+def _load_allowlist(evidence_dir: Path) -> list[dict]:
+    """Read the suppression list from an evidence directory.
+
+    A missing or unreadable file simply means no suppressions.
+    """
+    data = _safe_read_json(str(evidence_dir / ALLOWLIST_FILE))
+    if not isinstance(data, dict):
+        return []
+    rules: list[dict] = []
+    for rule in data.get("suppress", []):
+        if not isinstance(rule, dict):
+            continue
+        # A rule with no selector would suppress everything.
+        if not rule.get("match") and not rule.get("file"):
+            continue
+        rules.append(rule)
+    return rules
+
+
+# ======================================================================
 # Helper: timestamp normalisation
 # ======================================================================
 
@@ -660,6 +756,10 @@ class ConversationParser:
         self._sessions: list[ConversationSession] = []
         self._findings: list[Finding] = []
         self._source_files: list[str] = []
+        # Pattern hits are grouped by (category, label, source file) so one rule
+        # tripped many times in one transcript reads as one alert.
+        self._pattern_groups: dict[tuple[str, str, str], Finding] = {}
+        self._allowlist: list[dict] = []
 
     # ------------------------------------------------------------------
     # Factory
@@ -670,6 +770,7 @@ class ConversationParser:
         """Load CHAIN_OF_CUSTODY.json and walk all collected files."""
         parser = cls()
         evidence_path = Path(evidence_dir)
+        parser._allowlist = _load_allowlist(evidence_path)
 
         # Collect file paths from chain-of-custody or directory walk
         file_entries: list[dict] = []
@@ -1757,15 +1858,28 @@ class ConversationParser:
         category: str, base_title: str,
         base_severity: Severity, mitre_atlas: list[str],
     ) -> None:
-        """Check text against a set of regex patterns and create Findings."""
+        """Check text against a set of regex patterns and record Findings.
+
+        Matches are grouped by (category, label, source file): a rule tripped by
+        many turns of one transcript yields one finding whose ``occurrences`` and
+        ``locations`` cover every match, which is what keeps a report triageable.
+        """
         seen_labels: set[str] = set()
         for label, pattern in patterns:
             match = pattern.search(text)
-            if match and label not in seen_labels:
-                seen_labels.add(label)
-                finding_id = f"conv_{category}_{len(self._findings):04d}"
-                self._findings.append(Finding(
-                    id=finding_id,
+            if not match or label in seen_labels:
+                continue
+            seen_labels.add(label)
+            if self._suppressed(turn.source_file, match.group()):
+                continue
+
+            key = (category, label, turn.source_file)
+            existing = self._pattern_groups.get(key)
+            defensive = _defensive_context(text, match)
+
+            if existing is None:
+                finding = Finding(
+                    id=f"conv_{category}_{len(self._findings):04d}",
                     title=f"{base_title}: {label}",
                     description=(
                         f"Detected {category} pattern '{label}' in {turn.platform} "
@@ -1793,7 +1907,79 @@ class ConversationParser:
                     mitre_atlas=mitre_atlas,
                     risk_score=self._severity_to_score(base_severity),
                     recommendation=self._recommendation_for_category(category),
-                ))
+                    occurrences=0,
+                    locations=[],
+                )
+                self._pattern_groups[key] = finding
+                self._findings.append(finding)
+                existing = finding
+                first_match = True
+            else:
+                first_match = False
+
+            existing.occurrences += 1
+            if len(existing.locations) < _MAX_FINDING_LOCATIONS:
+                existing.locations.append({
+                    "file": turn.source_file,
+                    "session_id": turn.session_id,
+                    "timestamp": turn.timestamp,
+                    "role": turn.role,
+                    "match": match.group()[:200],
+                })
+
+            # A group is only treated as defensive when *every* occurrence sits in
+            # defensive framing: one genuine attempt in the same file must keep
+            # the finding at full severity.
+            if defensive and first_match:
+                self._mark_defensive(existing, base_title, label, category)
+            elif not defensive:
+                self._clear_defensive(existing, base_title, label, base_severity, category)
+
+    def _mark_defensive(
+        self, finding: Finding, base_title: str, label: str, category: str,
+    ) -> None:
+        """Demote a finding whose match is quoted in order to be refused.
+
+        Hardening text has to name the strings it forbids, so this keeps the
+        match as evidence without letting it compete with real attempts.
+        """
+        finding.severity = Severity.INFO
+        finding.risk_score = self._severity_to_score(Severity.INFO)
+        finding.title = f"{base_title}: {label} — defensive context"
+        if not finding.description.endswith(_DEFENSIVE_NOTE):
+            finding.description += _DEFENSIVE_NOTE
+        finding.recommendation = (
+            "Likely a false positive: confirm the surrounding text is anti-injection"
+            f" guidance, then allowlist it in {ALLOWLIST_FILE} to keep it out of later reports."
+        )
+
+    def _clear_defensive(
+        self, finding: Finding, base_title: str, label: str,
+        base_severity: Severity, category: str,
+    ) -> None:
+        """Restore a finding to full severity once a genuine match is seen."""
+        finding.severity = base_severity
+        finding.risk_score = self._severity_to_score(base_severity)
+        finding.title = f"{base_title}: {label}"
+        finding.recommendation = self._recommendation_for_category(category)
+        if finding.description.endswith(_DEFENSIVE_NOTE):
+            finding.description = finding.description[: -len(_DEFENSIVE_NOTE)]
+
+    def _suppressed(self, source_file: str, matched_text: str) -> bool:
+        """Report whether an allowlist rule covers this match."""
+        if not self._allowlist:
+            return False
+        lower_file = (source_file or "").lower()
+        lower_match = matched_text.lower()
+        for rule in self._allowlist:
+            match_sel = str(rule.get("match", "")).lower()
+            file_sel = str(rule.get("file", "")).lower()
+            if match_sel and match_sel not in lower_match:
+                continue
+            if file_sel and file_sel not in lower_file:
+                continue
+            return True
+        return False
 
     def _check_base64_content(self, turn: ConversationTurn) -> None:
         """Detect suspiciously large base64 blocks in conversation content."""

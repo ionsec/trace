@@ -53,19 +53,32 @@ type Detection struct {
 	Category   string   `json:"category"`
 }
 
+// FindingLocation is one place a finding's pattern matched. Repeat matches are
+// grouped into a single finding — one alert per rule per file rather than one
+// per turn — and the locations are what still let an analyst reach every
+// occurrence.
+type FindingLocation struct {
+	File  string `json:"file"`
+	Line  int    `json:"line,omitempty"`
+	Turn  int    `json:"turn,omitempty"`
+	Match string `json:"match,omitempty"`
+}
+
 // Finding is a forensic finding with a risk assessment.
 type Finding struct {
-	ID             string   `json:"id"`
-	Title          string   `json:"title"`
-	Description    string   `json:"description"`
-	Severity       Severity `json:"severity"`
-	Platform       string   `json:"platform"`
-	ArtifactType   string   `json:"artifact_type"`
-	Evidence       []string `json:"evidence"`
-	IOCs           []string `json:"iocs"`
-	MITREAtlas     []string `json:"mitre_atlas"`
-	RiskScore      int      `json:"risk_score"`
-	Recommendation string   `json:"recommendation"`
+	ID             string            `json:"id"`
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	Severity       Severity          `json:"severity"`
+	Platform       string            `json:"platform"`
+	ArtifactType   string            `json:"artifact_type"`
+	Evidence       []string          `json:"evidence"`
+	IOCs           []string          `json:"iocs"`
+	MITREAtlas     []string          `json:"mitre_atlas"`
+	RiskScore      int               `json:"risk_score"`
+	Recommendation string            `json:"recommendation"`
+	Occurrences    int               `json:"occurrences,omitempty"`
+	Locations      []FindingLocation `json:"locations,omitempty"`
 }
 
 // Truncation records that collection was clipped for a platform because a

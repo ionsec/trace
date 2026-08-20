@@ -125,14 +125,22 @@ a timestamp.
 ./bin/trace-darwin-arm64 iris /tmp/evidence --host https://iris.example.com --api-key "$IRIS_API_KEY"
 ```
 
+On Windows, pass a Windows path to `-o` (`C:\evidence`, `.\evidence`) instead of
+the POSIX form above — `/evidence` has no drive letter and resolves against the
+drive of the current directory. Every command prints the resolved absolute path:
+
+```powershell
+trace-windows-amd64.exe collect -o C:\evidence --deep
+```
+
 ### Python / Go capability parity
 
 Both builds share one forensic data model (chain of custody, SHA-256 hashing,
 UTC timestamps) and one analysis contract, so evidence produced by either is
 interchangeable and either can report on the other's output. Capabilities are
-**near-identical**, with one deliberate exception: the Go binary
-(see below) and therefore collects SQLite conversation stores but does not
-parse them.
+**near-identical**, with one deliberate exception: the Go binary carries no cgo
+or system-library dependencies (see below) and therefore collects SQLite
+conversation stores but does not parse them.
 
 | Capability | Python CLI | Go binary |
 |---|---|---|

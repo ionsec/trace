@@ -67,8 +67,20 @@ type countRow struct {
 // findingView is a finding prepared for display.
 type findingView struct {
 	model.Finding
-	SeverityLabel string
-	SearchText    string
+	SeverityLabel      string
+	SearchText         string
+	LocationsTruncated bool
+}
+
+// locationSearchText makes a grouped finding's files reachable from the
+// findings filter box, so an analyst can search by the file that tripped it.
+func locationSearchText(locations []model.FindingLocation) string {
+	var b strings.Builder
+	for _, l := range locations {
+		b.WriteString(l.File)
+		b.WriteString(" ")
+	}
+	return b.String()
 }
 
 // actionView is a priority action with its urgency colour resolved.
@@ -391,9 +403,10 @@ func buildView(evidenceDir string, coc model.ChainOfCustody, analysis model.Anal
 	for _, f := range analysis.Findings {
 		sev := strings.ToLower(string(f.Severity))
 		view.Findings = append(view.Findings, findingView{
-			Finding:       f,
-			SeverityLabel: title(sev),
-			SearchText:    strings.ToLower(f.Title + " " + f.Description + " " + f.Platform),
+			Finding:            f,
+			SeverityLabel:      title(sev),
+			SearchText:         strings.ToLower(f.Title + " " + f.Description + " " + f.Platform + " " + locationSearchText(f.Locations)),
+			LocationsTruncated: f.Occurrences > len(f.Locations),
 		})
 	}
 

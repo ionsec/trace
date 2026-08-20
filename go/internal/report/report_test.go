@@ -39,6 +39,17 @@ func sampleEvidence() (model.ChainOfCustody, model.Analysis) {
 				Severity: model.SeverityCritical, Platform: "claude_code", ArtifactType: "conversation",
 				Evidence: []string{"/home/dana/.claude/session.jsonl"}, MITREAtlas: []string{"AML.T0054"},
 				RiskScore: 90, Recommendation: "Preserve the transcript."},
+			{ID: "TRACE-CONV-0002", Title: "Indirect prompt injection via external content",
+				Description: "One rule tripped repeatedly in a single transcript.",
+				Severity:    model.SeverityHigh, Platform: "claude_code", ArtifactType: "conversation",
+				Evidence:   []string{"/home/dana/.claude/session.jsonl:42"},
+				MITREAtlas: []string{"AML.T0051"}, RiskScore: 70,
+				Recommendation: "Preserve the transcript and review every location.",
+				Occurrences:    7,
+				Locations: []model.FindingLocation{
+					{File: "/home/dana/.claude/session.jsonl", Line: 42, Turn: 3, Match: "ignore previous instructions"},
+					{File: "/home/dana/.claude/session.jsonl", Line: 88, Turn: 9, Match: "ignore previous instructions"},
+				}},
 		},
 		AtlasMapping: []model.AtlasMapping{
 			{TechniqueID: "AML.T0055", TechniqueName: "Unsecured Credentials", Evidence: "API key detected",
@@ -146,6 +157,17 @@ func TestGenerateHTMLRendersEveryTab(t *testing.T) {
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("html missing content %q", want)
+		}
+	}
+
+	// A grouped finding must expose every location, so collapsing repeat alerts
+	// never costs an analyst the ability to reach each match.
+	for _, want := range []string{
+		"Locations", "session.jsonl:42", "session.jsonl:88", "7 match(es)",
+		"Location list truncated",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("html missing grouped-finding detail %q", want)
 		}
 	}
 

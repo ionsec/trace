@@ -92,6 +92,8 @@ class JSONReportGenerator:
                 "mitre_atlas": f.mitre_atlas,
                 "risk_score": f.risk_score,
                 "recommendation": f.recommendation,
+                "occurrences": getattr(f, "occurrences", 1),
+                "locations": getattr(f, "locations", []),
             }
         if isinstance(f, dict):
             return f
