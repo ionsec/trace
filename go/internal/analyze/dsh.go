@@ -110,8 +110,14 @@ func (p *ConversationParser) parseDsh(content, path, platform string) {
 	workspace := ""
 	parentSession := ""
 
-	records := make([]dshRecord, 0, len(lines))
-	for _, line := range lines {
+	// The source line travels with the record so a finding can point an analyst
+	// at the exact line of the transcript, not just the file.
+	type numbered struct {
+		rec  dshRecord
+		line int
+	}
+	records := make([]numbered, 0, len(lines))
+	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || !strings.HasPrefix(line, "{") {
 			continue
@@ -128,12 +134,16 @@ func (p *ConversationParser) parseDsh(content, path, platform string) {
 			parentSession = rec.ParentSession
 			continue
 		}
-		records = append(records, rec)
+		records = append(records, numbered{rec: rec, line: i + 1})
 	}
 
-	for _, rec := range records {
-		turn, ok := p.dshTurn(rec, path, sessionID, workspace, parentSession)
+	index := 0
+	for _, n := range records {
+		turn, ok := p.dshTurn(n.rec, path, sessionID, workspace, parentSession)
 		if ok {
+			index++
+			turn.SourceLine = n.line
+			turn.TurnIndex = index
 			p.Turns = append(p.Turns, turn)
 		}
 	}

@@ -68,7 +68,12 @@ class ParsedArtifact:
 
 @dataclass
 class Finding:
-    """A forensic finding with risk assessment."""
+    """A forensic finding with risk assessment.
+
+    ``occurrences`` and ``locations`` exist so a rule tripped many times by one
+    artifact is reported as a single finding with every location listed, rather
+    than as one near-identical alert per match.
+    """
     id: str
     title: str
     description: str
@@ -80,6 +85,8 @@ class Finding:
     mitre_atlas: list = field(default_factory=list)
     risk_score: int = 0
     recommendation: str = ""
+    occurrences: int = 1
+    locations: list = field(default_factory=list)
 
 
 class BaseCollector(ABC):

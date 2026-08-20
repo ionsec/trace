@@ -188,7 +188,16 @@ need SQLite conversation parsing.
 
   ```powershell
   trace collect --output C:\evidence\
+  trace-windows-amd64.exe collect -o C:\evidence --deep
   ```
+
+- Always give `--output` / `-o` a Windows path (`C:\evidence`, `.\evidence`).
+  The POSIX examples elsewhere in the docs use `/evidence`, which on Windows is
+  rooted but has no drive letter: it resolves against the drive of the current
+  directory, so evidence lands in `C:\evidence` — or the run fails at the drive
+  root without Administrator rights. TRACE prints the resolved absolute path
+  and warns about the driveless form; read that line to confirm where the
+  evidence went.
 
 ---
 

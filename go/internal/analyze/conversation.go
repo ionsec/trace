@@ -24,6 +24,8 @@ type Turn struct {
 	Model           string
 	SessionID       string
 	SourceFile      string
+	SourceLine      int // 1-based line in SourceFile; 0 when the format has no lines
+	TurnIndex       int // 1-based position of this turn within SourceFile
 	ToolCommand     string
 	ToolInput       string
 	ToolDescription string
@@ -39,6 +41,25 @@ type Turn struct {
 type ConversationParser struct {
 	Turns    []Turn
 	Findings []model.Finding
+
+	// Pattern hits are accumulated per (category, pattern, source file) and
+	// only then turned into findings, so one rule tripped many times in one
+	// transcript reads as one alert with many locations.
+	hits      map[string]*convHit
+	hitOrder  []string
+	allowlist []allowRule
+}
+
+// convHit accumulates every match of one pattern in one source file.
+type convHit struct {
+	category    convCategory
+	pattern     string
+	platform    string
+	role        string
+	firstMatch  string
+	defensive   bool
+	occurrences int
+	locations   []model.FindingLocation
 }
 
 // rawMessage covers the message shapes TRACE meets across platforms: the
@@ -190,7 +211,7 @@ func toolCallFromBlock(b contentBlock, path, platform, sessionID string) (Turn, 
 // ParseEvidenceDir reconstructs every conversation recorded in an evidence
 // directory and scans each turn for the DFIR pattern catalog.
 func ParseEvidenceDir(evidenceDir string) *ConversationParser {
-	p := &ConversationParser{}
+	p := &ConversationParser{allowlist: loadAllowlist(evidenceDir)}
 	for _, entry := range LoadCustody(evidenceDir) {
 		p.parseFile(entry.OriginalPath, entry.Platform)
 	}
@@ -235,7 +256,8 @@ func (p *ConversationParser) parseFile(path, platform string) {
 // parseJSONL reads a line-delimited transcript, the format agent CLIs use.
 func (p *ConversationParser) parseJSONL(content, path, platform string) {
 	sessionID := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	for _, line := range strings.Split(content, "\n") {
+	index := 0
+	for i, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || !strings.HasPrefix(line, "{") {
 			continue
@@ -245,6 +267,9 @@ func (p *ConversationParser) parseJSONL(content, path, platform string) {
 			continue
 		}
 		if turn, ok := p.toTurn(msg, path, platform, sessionID); ok {
+			index++
+			turn.SourceLine = i + 1
+			turn.TurnIndex = index
 			p.Turns = append(p.Turns, turn)
 		}
 	}
@@ -282,12 +307,17 @@ func (p *ConversationParser) parseJSON(content, path, platform string) {
 		sessionID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
 
+	// A whole-document transcript has no per-message line, so the turn's
+	// position in the document is the locator an analyst gets instead.
+	index := 0
 	for _, list := range [][]rawMessage{doc.Messages, doc.Conversation, doc.History, doc.Turns, doc.Chat} {
 		for _, msg := range list {
 			if msg.Model == "" {
 				msg.Model = doc.Model
 			}
 			if turn, ok := p.toTurn(msg, path, platform, sessionID); ok {
+				index++
+				turn.TurnIndex = index
 				p.Turns = append(p.Turns, turn)
 			}
 		}
@@ -465,8 +495,13 @@ func (p *ConversationParser) codexTurn(msg rawMessage, path, platform, sessionID
 	return Turn{}, false
 }
 
-// scanTurn runs the conversation-forensics catalog over one turn and records a
-// finding per category hit.
+// maxFindingLocations caps how many locations one grouped finding carries. A
+// transcript can trip the same rule thousands of times; the count stays exact
+// while the location list stays readable.
+const maxFindingLocations = 25
+
+// scanTurn runs the conversation-forensics catalog over one turn, recording
+// each category hit against its (category, pattern, source file) group.
 func (p *ConversationParser) scanTurn(turn Turn) {
 	haystack := strings.Join([]string{turn.Content, turn.ToolCommand, turn.ToolInput}, "\n")
 	if strings.TrimSpace(haystack) == "" {
@@ -478,21 +513,254 @@ func (p *ConversationParser) scanTurn(turn Turn) {
 			if match == "" {
 				continue
 			}
-			p.Findings = append(p.Findings, model.Finding{
-				ID:             fmt.Sprintf("TRACE-CONV-%04d", len(p.Findings)+1),
-				Title:          cat.Description + " (" + pat.Label + ")",
-				Description:    cat.Description + " detected in a " + turn.Role + " turn on " + turn.Platform + ".",
-				Severity:       model.Severity(cat.Severity),
-				Platform:       turn.Platform,
-				ArtifactType:   "conversation",
-				Evidence:       []string{turn.SourceFile, truncate(strings.TrimSpace(match), 200)},
-				MITREAtlas:     atlasForCategory(cat.Name),
-				RiskScore:      severityScore(cat.Severity),
-				Recommendation: recommendationForCategory(cat.Name),
-			})
-			break // one finding per category per turn
+			p.recordHit(cat, pat.Label, turn, match, haystack)
+			break // one hit per category per turn
 		}
 	}
+	p.rebuildConvFindings()
+}
+
+// recordHit folds one pattern match into its group, unless the analyst has
+// allowlisted it.
+func (p *ConversationParser) recordHit(cat convCategory, label string, turn Turn, match, haystack string) {
+	if p.suppressed(turn.SourceFile, match) {
+		return
+	}
+	if p.hits == nil {
+		p.hits = map[string]*convHit{}
+	}
+
+	key := cat.Name + "|" + label + "|" + turn.SourceFile
+	hit, ok := p.hits[key]
+	if !ok {
+		hit = &convHit{
+			category:   cat,
+			pattern:    label,
+			platform:   turn.Platform,
+			role:       turn.Role,
+			firstMatch: strings.TrimSpace(match),
+			defensive:  true,
+		}
+		p.hits[key] = hit
+		p.hitOrder = append(p.hitOrder, key)
+	}
+
+	hit.occurrences++
+	if len(hit.locations) < maxFindingLocations {
+		hit.locations = append(hit.locations, model.FindingLocation{
+			File:  turn.SourceFile,
+			Line:  turn.SourceLine,
+			Turn:  turn.TurnIndex,
+			Match: truncate(strings.TrimSpace(match), 200),
+		})
+	}
+	// A group is only treated as defensive when *every* occurrence sits in
+	// defensive framing: one genuine attempt in the same file must keep the
+	// finding at full severity.
+	if !defensiveContext(haystack, match) {
+		hit.defensive = false
+	}
+}
+
+// rebuildConvFindings projects the accumulated hits onto Findings. It runs
+// after each scanned turn so Findings is always current, and rebuilds from
+// scratch so IDs stay dense and stable in hit order.
+func (p *ConversationParser) rebuildConvFindings() {
+	p.Findings = p.Findings[:0]
+	for _, key := range p.hitOrder {
+		hit := p.hits[key]
+		if hit == nil {
+			continue
+		}
+
+		severity := hit.category.Severity
+		description := hit.category.Description + " detected in a " + hit.role + " turn on " + hit.platform + "."
+		recommendation := recommendationForCategory(hit.category.Name)
+		title := hit.category.Description + " (" + hit.pattern + ")"
+		if hit.defensive {
+			// The match is quoted in order to be forbidden — hardening text, an
+			// injection-handling instruction, or an incident note. Kept as
+			// evidence, but demoted so it does not compete with real attempts.
+			severity = string(model.SeverityInfo)
+			title += " — defensive context"
+			description += " Every match sits in defensive framing (the string is quoted in order" +
+				" to be refused or reported), so this is most likely anti-injection text rather" +
+				" than an attempt. Review before dismissing."
+			recommendation = "Likely a false positive: confirm the surrounding text is anti-injection" +
+				" guidance, then allowlist it in " + AllowlistFile + " to keep it out of later reports."
+		}
+		if hit.occurrences > 1 {
+			description += fmt.Sprintf(" Matched %d time(s) in this file; see the locations list.", hit.occurrences)
+		}
+
+		p.Findings = append(p.Findings, model.Finding{
+			ID:             fmt.Sprintf("TRACE-CONV-%04d", len(p.Findings)+1),
+			Title:          title,
+			Description:    description,
+			Severity:       model.Severity(severity),
+			Platform:       hit.platform,
+			ArtifactType:   "conversation",
+			Evidence:       []string{locationLabel(hit.locations, hit.category.Name), truncate(hit.firstMatch, 200)},
+			MITREAtlas:     atlasForCategory(hit.category.Name),
+			RiskScore:      severityScore(severity),
+			Recommendation: recommendation,
+			Occurrences:    hit.occurrences,
+			Locations:      hit.locations,
+		})
+	}
+}
+
+// locationLabel renders the first location as the "file:line" reference an
+// analyst can paste into an editor.
+func locationLabel(locations []model.FindingLocation, fallback string) string {
+	if len(locations) == 0 {
+		return fallback
+	}
+	first := locations[0]
+	if first.Line > 0 {
+		return fmt.Sprintf("%s:%d", first.File, first.Line)
+	}
+	if first.Turn > 0 {
+		return fmt.Sprintf("%s (turn %d)", first.File, first.Turn)
+	}
+	return first.File
+}
+
+// defensiveWindow is how much text either side of a match is inspected for
+// defensive framing.
+const defensiveWindow = 320
+
+// defensiveMarkers are phrases that appear when a suspicious string is being
+// quoted in order to be refused — anti-injection guidance, agent hardening
+// text, or an analyst's own incident note — rather than issued as an
+// instruction. Prompt-injection hardening is now routine in agent
+// configuration, so without this check the tool flags the control as the
+// attack.
+//
+// Every marker names the string from the outside ("do not follow it",
+// "injection attempt"); phrasing an attacker would plausibly use is
+// deliberately absent, so a real attempt is not silenced.
+var defensiveMarkers = []string{
+	"prompt injection",
+	"injection attempt",
+	"anything resembling",
+	"looks like an instruction",
+	"do not follow it",
+	"do not follow them",
+	"don't follow it",
+	"do not obey it",
+	"never follow it",
+	"note it in your report",
+	"report it as",
+	"false positive",
+	"instead of following",
+}
+
+// defensiveLeads mark the match as an example rather than a request, but only
+// when they sit immediately before it.
+var defensiveLeads = []string{"e.g.", "eg.", "such as", "for example", "like "}
+
+// defensiveLeadWindow is how far back a lead-in phrase still counts.
+const defensiveLeadWindow = 48
+
+// defensiveContext reports whether a match is framed as something to refuse or
+// as a quoted example, rather than issued as an instruction.
+func defensiveContext(haystack, match string) bool {
+	idx := strings.Index(haystack, match)
+	if idx < 0 {
+		return false
+	}
+
+	start := idx - defensiveWindow
+	if start < 0 {
+		start = 0
+	}
+	end := idx + len(match) + defensiveWindow
+	if end > len(haystack) {
+		end = len(haystack)
+	}
+	window := strings.ToLower(haystack[start:end])
+	for _, marker := range defensiveMarkers {
+		if strings.Contains(window, marker) {
+			return true
+		}
+	}
+
+	lead := strings.ToLower(haystack[start:idx])
+	if len(lead) > defensiveLeadWindow {
+		lead = lead[len(lead)-defensiveLeadWindow:]
+	}
+	for _, l := range defensiveLeads {
+		if strings.Contains(lead, l) {
+			return true
+		}
+	}
+	return false
+}
+
+// AllowlistFile is the optional analyst-maintained suppression list read from
+// the evidence directory:
+//
+//	{"suppress": [{"match": "ignore previous instructions",
+//	               "file": "CLAUDE.md",
+//	               "reason": "our own anti-injection guidance"}]}
+//
+// A rule needs "match", "file", or both; "match" is a case-insensitive
+// substring of the matched text and "file" of the source path. Suppression is
+// an explicit analyst decision, so suppressed hits are dropped rather than
+// demoted.
+const AllowlistFile = "trace-allowlist.json"
+
+// allowRule is one suppression entry.
+type allowRule struct {
+	Match  string `json:"match"`
+	File   string `json:"file"`
+	Reason string `json:"reason"`
+}
+
+// allowlistDoc is the allowlist file's document shape.
+type allowlistDoc struct {
+	Suppress []allowRule `json:"suppress"`
+}
+
+// loadAllowlist reads the allowlist from an evidence directory. A missing or
+// unreadable file simply means no suppressions.
+func loadAllowlist(evidenceDir string) []allowRule {
+	data, err := os.ReadFile(filepath.Join(evidenceDir, AllowlistFile))
+	if err != nil {
+		return nil
+	}
+	var doc allowlistDoc
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil
+	}
+	rules := make([]allowRule, 0, len(doc.Suppress))
+	for _, r := range doc.Suppress {
+		if r.Match == "" && r.File == "" {
+			continue // a rule with no selector would suppress everything
+		}
+		rules = append(rules, r)
+	}
+	return rules
+}
+
+// suppressed reports whether an allowlist rule covers this match.
+func (p *ConversationParser) suppressed(sourceFile, match string) bool {
+	if len(p.allowlist) == 0 {
+		return false
+	}
+	lowerFile := strings.ToLower(sourceFile)
+	lowerMatch := strings.ToLower(match)
+	for _, rule := range p.allowlist {
+		if rule.Match != "" && !strings.Contains(lowerMatch, strings.ToLower(rule.Match)) {
+			continue
+		}
+		if rule.File != "" && !strings.Contains(lowerFile, strings.ToLower(rule.File)) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // atlasForCategory maps a conversation attack category to MITRE ATLAS.

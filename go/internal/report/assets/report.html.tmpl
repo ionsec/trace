@@ -184,6 +184,9 @@
     <div class="card-body collapsed">
       <p>{{.Description}}</p>
       {{if .Evidence}}<h4>Evidence</h4><ul>{{range .Evidence}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
+      {{if .Locations}}<h4>Locations{{if gt .Occurrences 1}} &mdash; {{.Occurrences}} match(es){{end}}</h4>
+      <ul>{{range .Locations}}<li><code>{{.File}}{{if .Line}}:{{.Line}}{{end}}</code>{{if .Turn}} <span style="color:var(--text-dim)">turn {{.Turn}}</span>{{end}}{{if .Match}} &mdash; <code>{{.Match}}</code>{{end}}</li>{{end}}</ul>
+      {{if .LocationsTruncated}}<p style="font-size:.78rem;color:var(--text-dim)">Location list truncated; {{.Occurrences}} match(es) in total.</p>{{end}}{{end}}
       {{if .MITREAtlas}}<h4>MITRE ATLAS</h4><ul>{{range .MITREAtlas}}<li>{{.}}</li>{{end}}</ul>{{end}}
       {{if .Recommendation}}<h4>Recommendation</h4><p>{{.Recommendation}}</p>{{end}}
       <p style="font-size:.75rem;color:var(--text-dim)">ID: {{.ID}} &middot; Platform: {{.Platform}} &middot; Risk: {{.RiskScore}}</p>

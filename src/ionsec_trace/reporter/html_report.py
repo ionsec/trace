@@ -918,6 +918,9 @@ footer{margin-top:3rem;text-align:center;font-size:.72rem;color:var(--text-dim);
     <div class="card-body collapsed">
       <p>{{ f.description }}</p>
       {% if f.evidence %}<h4>Evidence</h4><ul>{% for ev in f.evidence %}<li><code>{{ ev }}</code></li>{% endfor %}</ul>{% endif %}
+      {% if f.locations %}<h4>Locations{% if f.occurrences and f.occurrences > 1 %} &mdash; {{ f.occurrences }} match(es){% endif %}</h4>
+      <ul>{% for loc in f.locations %}<li><code>{{ loc.file }}{% if loc.line %}:{{ loc.line }}{% endif %}</code>{% if loc.session_id %} <span style="color:var(--text-dim)">session {{ loc.session_id }}</span>{% endif %}{% if loc.match %} &mdash; <code>{{ loc.match }}</code>{% endif %}</li>{% endfor %}</ul>
+      {% if f.occurrences and f.occurrences > f.locations | length %}<p style="font-size:.78rem;color:var(--text-dim)">Location list truncated; {{ f.occurrences }} match(es) in total.</p>{% endif %}{% endif %}
       {% if f.iocs %}<h4>IOCs</h4><ul>{% for ioc in f.iocs %}<li>{{ ioc }}</li>{% endfor %}</ul>{% endif %}
       {% if f.mitre_atlas %}<h4>MITRE ATLAS</h4><ul>{% for ma in f.mitre_atlas %}<li>{{ ma }}</li>{% endfor %}</ul>{% endif %}
       {% if f.recommendation %}<h4>Recommendation</h4><p>{{ f.recommendation }}</p>{% endif %}

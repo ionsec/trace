@@ -116,6 +116,24 @@ def reporter_evidence_dir(tmp_path):
                 "risk_score": 60,
                 "recommendation": "Review agent permissions and implement approval gates.",
             },
+            {
+                "id": "FIND-003",
+                "title": "Indirect prompt injection via external content",
+                "description": "One rule tripped repeatedly in a single transcript.",
+                "severity": "high",
+                "platform": "claude_code",
+                "artifact_type": "conversation",
+                "evidence": [f"{log_file}:42"],
+                "iocs": [],
+                "mitre_atlas": ["AML.T0051"],
+                "risk_score": 70,
+                "recommendation": "Preserve the transcript and review every location.",
+                "occurrences": 7,
+                "locations": [
+                    {"file": "session.jsonl", "line": 42, "match": "ignore previous instructions"},
+                    {"file": "session.jsonl", "line": 88, "match": "ignore previous instructions"},
+                ],
+            },
         ],
         "iocs": [
             {
@@ -215,6 +233,18 @@ class TestHTMLReportGenerator:
         html = output.read_text(encoding="utf-8")
         assert "Exposed API Key" in html
         assert "Suspicious Command Execution" in html
+
+    def test_html_lists_grouped_finding_locations(self, reporter_evidence_dir):
+        """A grouped finding must expose every location, so collapsing repeat
+        alerts never costs an analyst the ability to reach each match."""
+        gen = HTMLReportGenerator(str(reporter_evidence_dir))
+        output = gen.generate()
+        html = output.read_text(encoding="utf-8")
+        assert "Locations" in html
+        assert "session.jsonl:42" in html
+        assert "session.jsonl:88" in html
+        assert "7 match(es)" in html
+        assert "Location list truncated; 7 match(es) in total." in html
 
     def test_html_contains_iocs(self, reporter_evidence_dir):
         gen = HTMLReportGenerator(str(reporter_evidence_dir))

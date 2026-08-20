@@ -108,6 +108,18 @@ make -C go all    # builds bin/trace-{darwin,linux,windows}-{amd64,arm64}
 ./bin/trace-darwin-arm64 report -o /evidence/case-001/ --format all
 ```
 
+On Windows, give `-o` a Windows path — `C:\evidence\case-001` or
+`.\evidence` — rather than copying the POSIX form above. A rooted path with no
+drive letter (`/evidence`) is legal but resolves against the drive of the
+current directory, so the evidence lands in `C:\evidence` (or fails at the drive
+root without Administrator rights). TRACE prints the resolved absolute path and
+warns about the driveless form, so check that line if output is not where you
+expect:
+
+```powershell
+trace-windows-amd64.exe collect -o C:\evidence\case-001 --deep
+```
+
 The Go binary implements the same platform catalog, secret-detection rule set,
 IOC extraction, conversation forensics, MITRE mapping, kill-chain
 reconstruction, risk scoring and report formats as the Python CLI, over one
@@ -293,6 +305,45 @@ Analyzing evidence from /evidence/case-001/
     jailbreak: 4/25
     autonomy: 3/25
 ```
+
+#### Grouped conversation findings
+
+A conversation pattern that matches many times in one transcript is reported as
+**one** finding, not one per turn. Each finding carries `occurrences` (the exact
+match count) and `locations` (up to 25 entries with the source file and, for
+line-delimited transcripts, the line and turn number), so a repeated hit stays
+one alert you can still trace back to every match.
+
+#### Defensive context and false positives
+
+Anti-injection guidance has to quote the strings it forbids, so text like
+`… e.g. "ignore previous instructions" … do NOT follow it` matches the
+prompt-injection catalog. TRACE inspects the text around each match: when
+*every* occurrence in an artifact is framed as something to refuse or as a
+quoted example, the finding is kept as evidence but demoted to `info` and its
+title is suffixed with `— defensive context`. A single genuine match in the
+same artifact restores the full severity, so a real attempt is never masked by
+nearby hardening text.
+
+To silence a confirmed false positive for good, drop a
+`trace-allowlist.json` into the evidence directory:
+
+```json
+{
+  "suppress": [
+    {
+      "match": "ignore previous instructions",
+      "file": "CLAUDE.md",
+      "reason": "our own anti-injection guidance"
+    }
+  ]
+}
+```
+
+A rule needs `match`, `file`, or both — `match` is a case-insensitive substring
+of the matched text, `file` of the source path. Suppression is an explicit
+analyst decision, so suppressed matches are dropped from the findings rather
+than demoted; a rule with neither selector is ignored.
 
 ---
 
