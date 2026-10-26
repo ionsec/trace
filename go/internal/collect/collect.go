@@ -18,7 +18,7 @@ import (
 	"github.com/ionsec/trace/go/internal/model"
 )
 
-const toolVersion = "1.0.1"
+const toolVersion = "1.1.0"
 
 // nowUTC returns the current UTC time in ISO 8601 format.
 func nowUTC() string {

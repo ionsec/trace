@@ -14,7 +14,7 @@ from rich.console import Console
 
 console = Console()
 
-VERSION = "1.0.1"
+VERSION = "1.1.0"
 
 # ---------------------------------------------------------------------------
 # MITRE ATT&CK technique catalog (AI/ML-relevant subset)

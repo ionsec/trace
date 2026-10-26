@@ -10,7 +10,7 @@ description: |
   - DNS cache entries for AI provider domains
   - Process-to-AI-domain correlations (which process talks to which AI)
 
-  Version: 1.0.1
+  Version: 1.1.0
   
   Reference: https://github.com/ionsec/trace
   License: AGPL-3.0-or-later

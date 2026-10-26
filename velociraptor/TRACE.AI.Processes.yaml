@@ -3,7 +3,7 @@ description: |
   TRACE — Detect running AI processes and cross-reference with
   network connections to AI service ports.
 
-  Version: 1.0.1
+  Version: 1.1.0
   
 
   This artifact collects:

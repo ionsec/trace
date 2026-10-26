@@ -21,7 +21,7 @@ pip install -e .
 Verify installation:
 ```bash
 $ trace --version
-TRACE, version 1.0.1
+TRACE, version 1.1.0
 ```
 
 > **Go binary (no Python required):** TRACE also ships as a single
@@ -48,7 +48,7 @@ Discovered 5 AI platform(s):
   • huggingface (cloud)
 ```
 
-TRACE automatically scans for 27 platforms across 4 categories:
+TRACE automatically scans for 49 platforms across 4 categories:
 - **Inference**: Ollama, LM Studio, GPT4All, text-generation-webui, llama.cpp, KoboldCpp, LiteLLM, Bifrost, Unsloth
 - **Agent**: DeepSeek Harness (dsh), Hermes, AutoGPT, CrewAI, Aider, Shell-GPT, Devin, Eigent, Shadow AI, Docker AI
 - **DevTool**: Cursor, Claude Code, Antigravity, VSCodium, Code Scanner
@@ -96,7 +96,7 @@ Every collection produces a `CHAIN_OF_CUSTODY.json`:
 ```json
 {
   "tool": "TRACE",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "collected_at": "2026-08-13T08:56:55.425142+00:00",
   "total_files": 144,
   "files": [
@@ -195,7 +195,7 @@ Structured machine-readable report:
 ```json
 {
   "schema_version": "1.0",
-  "metadata": { "tool": "TRACE", "version": "1.0.1" },
+  "metadata": { "tool": "TRACE", "version": "1.1.0" },
   "platforms": [...],
   "evidence_manifest": [...],
   "findings": [...],

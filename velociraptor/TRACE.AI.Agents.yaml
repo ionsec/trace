@@ -4,7 +4,7 @@ description: |
   (DeepSeek Harness, Hermes Agent, AutoGPT, CrewAI, LangChain/LangGraph,
   Microsoft AutoGen, Aider, Shell-GPT).
 
-  Version: 1.0.1
+  Version: 1.1.0
   
 
   This artifact collects:

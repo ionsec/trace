@@ -14,7 +14,7 @@ description: |
   verified against its SHA-256 before execution. If the endpoint already has
   a TRACE binary at BinaryPath, that is used instead of downloading.
 
-  Version: 1.0.1
+  Version: 1.1.0
   Reference: https://github.com/ionsec/trace
   License: AGPL-3.0-or-later
 

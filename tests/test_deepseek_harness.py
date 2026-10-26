@@ -196,6 +196,11 @@ def dsh_home(tmp_path, monkeypatch):
     # Keep the shared skills root out of the assertions — it belongs to whichever
     # agent tools are installed, not to this fixture.
     monkeypatch.setenv("DSH_AGENTS_HOME", str(tmp_path / "no-such-agents-root"))
+    # Never fall back to the runner's real home (~/.dsh may be unreadable in CI).
+    monkeypatch.setattr(
+        DeepSeekHarnessCollector, "get_user_home_dirs",
+        lambda self: [tmp_path / "no-such-home"],
+    )
     return root
 
 

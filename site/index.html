@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TRACE — AI &amp; Compute Forensic Evidence Collector | IONSEC</title>
-<meta name="description" content="TRACE collects, analyzes and reports AI platform evidence from an endpoint — forensically soundly. 27 collectors, 103 secret-detection rules, MITRE ATLAS &amp; ATT&amp;CK mapping, STIX 2.1. Python CLI and Go binary. Built by IONSEC, a DFIR company.">
+<meta name="description" content="TRACE collects, analyzes and reports AI platform evidence from an endpoint — forensically soundly. 52 collectors, 103 secret-detection rules, MITRE ATLAS &amp; ATT&amp;CK mapping, STIX 2.1. Python CLI and Go binary. Built by IONSEC, a DFIR company.">
 <meta name="keywords" content="DFIR, digital forensics, incident response, shadow AI, LLM security, AI forensics, MITRE ATLAS, STIX, Velociraptor, IONSEC">
 <meta name="author" content="IONSEC">
 <link rel="canonical" href="https://ionsec.github.io/trace/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TRACE by IONSEC">
 <meta property="og:title" content="TRACE — Leave no model untraced">
-<meta property="og:description" content="Forensically sound AI evidence collection, analysis and reporting for DFIR teams. 27 collectors, 103 secret rules, MITRE ATLAS &amp; ATT&amp;CK, STIX 2.1.">
+<meta property="og:description" content="Forensically sound AI evidence collection, analysis and reporting for DFIR teams. 52 collectors, 103 secret rules, MITRE ATLAS &amp; ATT&amp;CK, STIX 2.1.">
 <meta property="og:url" content="https://ionsec.github.io/trace/">
 <meta property="og:image" content="https://ionsec.github.io/trace/report-preview.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -30,12 +30,13 @@
   "name": "TRACE",
   "applicationCategory": "SecurityApplication",
   "operatingSystem": "macOS, Linux, Windows",
-  "softwareVersion": "1.0.1",
+  "softwareVersion": "1.1.0",
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
   "author": {"@type": "Organization", "name": "IONSEC", "url": "https://ionsec.io"}
 }
 </script>
+<script>document.documentElement.classList.add('js')</script>
 <style>
 /* ============================================================
    Design tokens
@@ -68,6 +69,7 @@
   --radius:12px;
   --radius-sm:8px;
   --maxw:1180px;
+  --ease:cubic-bezier(.16,1,.3,1);
 
   /* 4/8pt spacing rhythm */
   --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem;
@@ -103,7 +105,7 @@ a{color:inherit;text-decoration:none;transition:color .2s}
    Typography
    ============================================================ */
 h1,h2,h3,h4{font-family:var(--sans);color:var(--text-bright);line-height:1.15;letter-spacing:-.02em}
-h1{font-size:clamp(2.05rem,6vw,4.4rem);font-weight:800}
+h1{font-size:clamp(2.05rem,4.7vw,4rem);font-weight:800}
 h2{font-size:clamp(1.9rem,3.6vw,2.7rem);font-weight:700}
 h3{font-size:1.15rem;font-weight:700}
 p{max-width:68ch}
@@ -271,6 +273,16 @@ p{max-width:68ch}
 .showcase-caption{padding:var(--s4) var(--s6);border-top:1px solid var(--line);font-family:var(--mono);font-size:.76rem;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:.4rem 1.2rem}
 
 /* ============================================================
+   Explainer video
+   ============================================================ */
+.video-figure{
+  border:1px solid var(--line-2);border-radius:var(--radius);overflow:hidden;
+  background:#050507;box-shadow:0 40px 90px -40px rgba(0,0,0,.95);
+}
+.video-figure video{display:block;width:100%;height:auto;background:#050507}
+.video-caption{padding:var(--s4) var(--s6);border-top:1px solid var(--line);font-family:var(--mono);font-size:.76rem;color:var(--text-dim)}
+
+/* ============================================================
    Parity table
    ============================================================ */
 .table-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow-x:auto;background:var(--surface)}
@@ -367,11 +379,28 @@ td.center,th.center{text-align:center;width:120px}
 /* ============================================================
    Motion
    ============================================================ */
-.reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
-.reveal.in{opacity:1;transform:none}
+/* Scroll reveal states are JS-gated so the page is fully visible without scripts. */
+.js .reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.js .reveal.in{opacity:1;transform:none}
+
+/* Hero entrance: SplitText-style masked word reveal plus staged supporting copy. */
+.js .hero h1 .lh{display:block;overflow:hidden}
+.js .hero h1 .w{display:inline-block;opacity:.001;transform:translateY(118%);transition:transform .9s var(--ease),opacity .9s var(--ease)}
+.js .hero .h-elem{opacity:0;transform:translateY(16px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.js .hero.run h1 .w{opacity:1;transform:none}
+.js .hero.run .h-elem{opacity:1;transform:none}
+
+/* Small craft fixes: stable numerals, inline-link affordance, form error. */
+.metric-value{font-variant-numeric:tabular-nums}
+.contact-meta a,.video-caption a{text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(230,57,70,.55)}
+.form-error{display:none;margin-bottom:var(--s4);padding:.65rem .8rem;border:1px solid rgba(255,68,68,.4);border-radius:var(--radius-sm);background:rgba(255,68,68,.08);color:#ffb0b5;font-size:.85rem}
+.form-error.show{display:block}
+
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
-  .reveal{opacity:1;transform:none}
+  .js .reveal{opacity:1;transform:none}
+  .js .hero h1 .w{opacity:1;transform:none}
+  .js .hero .h-elem{opacity:1;transform:none}
 }
 </style>
 </head>
@@ -393,6 +422,7 @@ td.center,th.center{text-align:center;width:120px}
     <nav class="nav-links" aria-label="Primary">
       <a href="#threat">Why</a>
       <a href="#capabilities">Capabilities</a>
+      <a href="#watch">Watch</a>
       <a href="#how">How it works</a>
       <a href="#report">Report</a>
       <a href="#deploy">Deploy</a>
@@ -414,6 +444,7 @@ td.center,th.center{text-align:center;width:120px}
     <div class="wrap">
       <a href="#threat">Why TRACE</a>
       <a href="#capabilities">Capabilities</a>
+      <a href="#watch">Watch</a>
       <a href="#how">How it works</a>
       <a href="#report">Report</a>
       <a href="#deploy">Deploy</a>
@@ -430,7 +461,7 @@ td.center,th.center{text-align:center;width:120px}
 <section class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="badge"><span class="dot"></span>v1.0.1 · AGPL-3.0 · by IONSEC</span>
+      <span class="badge"><span class="dot"></span>v1.1.0 · AGPL-3.0 · by IONSEC</span>
       <h1>Leave no<span class="line2">model untraced.</span></h1>
       <p class="lead">
         Your endpoints are running AI tools nobody approved — holding plaintext provider keys,
@@ -462,10 +493,28 @@ td.center,th.center{text-align:center;width:120px}
 <!-- ================= METRICS ================= -->
 <section class="wrap" aria-label="Key numbers">
   <div class="metrics reveal">
-    <div class="metric"><div class="metric-value" data-count="27">0</div><div class="metric-label">Platform collectors</div></div>
+    <div class="metric"><div class="metric-value" data-count="52">0</div><div class="metric-label">Platform collectors</div></div>
     <div class="metric"><div class="metric-value" data-count="103">0</div><div class="metric-label">Secret rules</div></div>
-    <div class="metric"><div class="metric-value" data-count="15">0</div><div class="metric-label">Velociraptor artifacts</div></div>
+    <div class="metric"><div class="metric-value" data-count="17">0</div><div class="metric-label">Velociraptor artifacts</div></div>
     <div class="metric"><div class="metric-value" data-count="3">0</div><div class="metric-label">Report formats</div></div>
+  </div>
+</section>
+
+<!-- ================= EXPLAINER ================= -->
+<section class="section" id="watch">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Explainer</span>
+      <h2>TRACE in 52 seconds</h2>
+      <p>Discovery, acquisition, analysis and the report — on a live endpoint, with the tool&rsquo;s own output as the evidence. No presenter, no mockups.</p>
+    </div>
+    <figure class="video-figure reveal">
+      <video controls preload="metadata" playsinline poster="video/trace-explainer-poster.png" width="1920" height="1080">
+        <source src="video/trace-explainer.mp4" type="video/mp4">
+        Your browser does not support the video tag — <a href="video/trace-explainer.mp4">download the MP4</a>.
+      </video>
+      <figcaption class="video-caption">52 s · 1920×1080 · real <code>trace discover</code>, <code>collect</code>, <code>analyze</code> and <code>report</code> output</figcaption>
+    </figure>
   </div>
 </section>
 
@@ -521,8 +570,8 @@ td.center,th.center{text-align:center;width:120px}
     <div class="grid grid-3">
       <article class="card reveal">
         <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round"/><circle cx="18" cy="18" r="3"/></svg></div>
-        <h3>27 platform collectors</h3>
-        <p>Inference runtimes, agent frameworks, AI dev tools and cloud caches — plus a shadow-AI sweep covering 47 more tools by their on-disk footprint.</p>
+        <h3>52 platform collectors</h3>
+        <p>Inference runtimes, agent frameworks, AI dev tools — Codex CLI, Gemini CLI, OpenCode, Cursor, Claude Code, Copilot, Warp and more — plus local apps, cloud caches and a shadow-AI sweep covering 47 further tools by their on-disk footprint.</p>
       </article>
 
       <article class="card reveal">
@@ -665,7 +714,7 @@ td.center,th.center{text-align:center;width:120px}
           <tr><th>Capability</th><th class="center">Python CLI</th><th class="center">Go binary</th></tr>
         </thead>
         <tbody>
-          <tr><td>27 collectors + 47 shadow-AI tool detections</td><td class="center"><span class="check">✓</span></td><td class="center"><span class="check">✓</span></td></tr>
+          <tr><td>52 collectors + 47 shadow-AI tool detections</td><td class="center"><span class="check">✓</span></td><td class="center"><span class="check">✓</span></td></tr>
           <tr><td>Curated collection + chain of custody</td><td class="center"><span class="check">✓</span></td><td class="center"><span class="check">✓</span></td></tr>
           <tr><td>IOC extraction &amp; 103-rule secret detection</td><td class="center"><span class="check">✓</span></td><td class="center"><span class="check">✓</span></td></tr>
           <tr><td>Conversation forensics &amp; secret hunt</td><td class="center"><span class="check">✓</span></td><td class="center"><span class="check">✓</span></td></tr>
@@ -690,7 +739,7 @@ td.center,th.center{text-align:center;width:120px}
       <div class="code-block reveal">
         <div class="code-head">
           <span>Python CLI</span>
-          <button class="copy-btn" data-copy="pip install ionsec-trace">Copy</button>
+          <button class="copy-btn" aria-live="polite" data-copy="pip install ionsec-trace">Copy</button>
         </div>
         <div class="code-body">
           <div><span class="p">$</span> pip install ionsec-trace</div>
@@ -705,7 +754,7 @@ td.center,th.center{text-align:center;width:120px}
       <div class="code-block reveal">
         <div class="code-head">
           <span>Go binary — no Python</span>
-          <button class="copy-btn" data-copy="./trace run -o /evidence">Copy</button>
+          <button class="copy-btn" aria-live="polite" data-copy="./trace run -o /evidence">Copy</button>
         </div>
         <div class="code-body">
           <div class="c"># download from the GitHub release, then:</div>
@@ -753,6 +802,7 @@ td.center,th.center{text-align:center;width:120px}
 
         <div class="contact-card">
           <form id="contactForm" novalidate>
+            <div class="form-error" id="cfError" role="alert"></div>
             <div class="contact-field">
               <label for="cf-name">Name</label>
               <input id="cf-name" name="name" type="text" autocomplete="name" required placeholder="Dana Levi">
@@ -813,7 +863,7 @@ td.center,th.center{text-align:center;width:120px}
       </details>
       <details>
         <summary>Can I run it across a whole fleet?</summary>
-        <div class="answer">Yes. TRACE ships 15 Velociraptor artifacts, including <code>TRACE.AI.Binary.Linux</code>, <code>.macOS</code> and <code>.Windows</code>, which fetch and run the binary on each endpoint and return the results to your existing Velociraptor server. No new infrastructure.</div>
+        <div class="answer">Yes. TRACE ships 17 Velociraptor artifacts, including <code>TRACE.AI.Binary.Linux</code>, <code>.macOS</code> and <code>.Windows</code>, which fetch and run the binary on each endpoint and return the results to your existing Velociraptor server. No new infrastructure.</div>
       </details>
       <details>
         <summary>How does it fit an existing DFIR workflow?</summary>
@@ -891,16 +941,17 @@ td.center,th.center{text-align:center;width:120px}
   var btn = document.getElementById('navToggle');
   var menu = document.getElementById('mobileMenu');
   if(!btn || !menu) return;
-  btn.addEventListener('click', function(){
-    var open = menu.classList.toggle('open');
+  function setMenu(open){
+    menu.classList.toggle('open', open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
     btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-  });
+  }
+  btn.addEventListener('click', function(){ setMenu(!menu.classList.contains('open')); });
   menu.addEventListener('click', function(e){
-    if(e.target.tagName === 'A'){
-      menu.classList.remove('open');
-      btn.setAttribute('aria-expanded','false');
-    }
+    if(e.target.tagName === 'A') setMenu(false);
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && menu.classList.contains('open')){ setMenu(false); btn.focus(); }
   });
 })();
 
@@ -945,6 +996,53 @@ td.center,th.center{text-align:center;width:120px}
     });
   }, {threshold: 0.5});
   nums.forEach(function(el){ io.observe(el); });
+})();
+
+/* ---------- Hero entrance (SplitText word-mask reveal) ---------- */
+(function(){
+  var hero = document.querySelector('.hero');
+  var h1 = document.querySelector('.hero h1');
+  if(!hero || !h1){ return; }
+  function run(){ hero.classList.add('run'); }
+  try{
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ run(); return; }
+    // Vanilla adaptation of React Bits' SplitText: wrap each word in a masked
+    // inline-block span, staggered by line. Content without JS stays intact.
+    function splitLine(el, base){
+      var words = el.textContent.trim().split(/\s+/);
+      el.innerHTML = words.map(function(w, i){
+        return '<span class="w" style="transition-delay:' + (base + i * 70) + 'ms">' + w + '</span>';
+      }).join(' ');
+      return words.length;
+    }
+    var first = h1.firstChild;
+    var firstText = String(first.nodeValue);
+    var l1 = document.createElement('span');
+    l1.className = 'lh';
+    l1.innerHTML = String(first.nodeValue).trim().split(/\s+/).map(function(w, i){
+      return '<span class="w" style="transition-delay:' + (120 + i * 70) + 'ms">' + w + '</span>';
+    }).join(' ');
+    h1.replaceChild(l1, first);
+    var line2 = h1.querySelector('.line2');
+    if(line2){
+      line2.classList.add('lh');
+      var base = 120 + l1.querySelectorAll('.w').length * 70 + 160;
+      splitLine(line2, base);
+    }
+    var label = firstText.replace(/\s+/g, ' ').trim();
+    if(line2) label += ' ' + line2.textContent.replace(/\s+/g, ' ').trim();
+    h1.setAttribute('aria-label', label);
+    [['.badge', 0], ['.lead', 620], ['.hero-cta', 760], ['.hero-note', 880], ['.terminal', 340]].forEach(function(d){
+      var el = hero.querySelector(d[0]);
+      if(!el) return;
+      el.classList.add('h-elem');
+      el.style.transitionDelay = d[1] + 'ms';
+    });
+    setTimeout(function(){
+      hero.querySelectorAll('.w').forEach(function(el){ el.style.transitionDelay = '0ms'; });
+    }, 1800);
+    requestAnimationFrame(function(){ requestAnimationFrame(run); });
+  }catch(e){ run(); }
 })();
 
 /* ---------- Hero terminal ---------- */
@@ -1030,11 +1128,26 @@ td.center,th.center{text-align:center;width:120px}
   document.querySelectorAll('.copy-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var text = btn.getAttribute('data-copy') || '';
-      navigator.clipboard.writeText(text).then(function(){
-        var original = btn.textContent;
-        btn.textContent = 'Copied';
+      var original = btn.textContent;
+      function show(label){
+        btn.textContent = label;
         setTimeout(function(){ btn.textContent = original; }, 1600);
-      });
+      }
+      function fallback(){
+        try{
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          show('Copied');
+        }catch(err){
+          show('Copy failed — select the code');
+        }
+      }
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){ show('Copied'); }, fallback);
+      } else { fallback(); }
     });
   });
 })();
@@ -1051,9 +1164,16 @@ td.center,th.center{text-align:center;width:120px}
     var msg = form.message.value.trim();
 
     if(!name || !email){
+      var err = document.getElementById('cfError');
+      if(err){
+        err.textContent = 'Name and work email are required — fill them in and submit again.';
+        err.classList.add('show');
+      }
       (name ? form.email : form.name).focus();
       return;
     }
+    var errOk = document.getElementById('cfError');
+    if(errOk) errOk.classList.remove('show');
 
     var body = [
       'Name: ' + name,

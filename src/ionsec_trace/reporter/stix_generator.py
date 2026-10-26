@@ -683,7 +683,7 @@ class STIXGenerator:
             "object_refs": object_refs[:500],  # STIX practical limit
             "labels": ["trace", "forensic"],
             "confidence": 85,
-            "x_trace_version": "1.0.1",
+            "x_trace_version": "1.1.0",
             "x_trace_evidence_dir": str(self.evidence_dir),
         })
 

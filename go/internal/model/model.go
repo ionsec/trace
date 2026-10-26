@@ -99,7 +99,7 @@ type ChainOfCustody struct {
 	CollectedAt string          `json:"collected_at"`
 	TotalFiles  int             `json:"total_files"`
 	Files       []CollectedFile `json:"files"`
-	Truncations []Truncation    `json:"truncations,omitempty"`
+	Truncations []Truncation    `json:"truncations"`
 }
 
 // ParsedArtifact is an analyst-facing summary of a collected artifact that

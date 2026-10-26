@@ -71,7 +71,7 @@ pip install -e ".[dev,iris]"
 
 ```bash
 trace --version
-# TRACE, version 1.0.1
+# TRACE, version 1.1.0
 ```
 
 ---
@@ -211,7 +211,7 @@ trace discover
 ./bin/trace-darwin-arm64 discover
 ```
 
-This scans all **27 collectors** across local inference engines, agent
+This scans all **52 collectors** across local inference engines, agent
 frameworks, AI development tools, cloud caches, live network AI traffic,
 source-code AI scanning, Docker AI workloads, and browser-based AI assistants.
 For a fast non-persisting summary (no files written):

@@ -37,7 +37,7 @@ class CollectedFile:
     size_bytes: int
     sha256: str
     collected_at: str  # ISO 8601 UTC
-    collector_version: str = "1.0.1"
+    collector_version: str = "1.1.0"
 
     def to_dict(self):
         return {
@@ -94,7 +94,7 @@ class BaseCollector(ABC):
 
     PLATFORM_NAME: str = ""
     PLATFORM_CATEGORY: PlatformCategory = PlatformCategory.INFERENCE
-    VERSION: str = "1.0.1"
+    VERSION: str = "1.1.0"
 
     LINUX_PATHS: list = []
     MACOS_PATHS: list = []

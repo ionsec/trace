@@ -53,7 +53,6 @@ class TestClaudeCodeNestedToolUse:
         assert commands == ["ls -la"]
 
     def test_nested_blocks_are_unwrapped(self):
-        parser = _parse_fixture("claude_code_tool_use.jsonl", "claude_code")
         # The Bash tool_use lives inside message.content, not at top level.
         calls = _extract_tool_calls({
             "message": {

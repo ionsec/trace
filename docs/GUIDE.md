@@ -2,7 +2,7 @@
 
 **Tool for Reconnaissance of AI & Compute Evidence**
 
-Version 1.0.1 · AGPL-3.0-or-later · [ionsec.io](https://ionsec.io)
+Version 1.1.0 · AGPL-3.0-or-later · [ionsec.io](https://ionsec.io)
 
 ---
 
@@ -132,7 +132,7 @@ collecting them raw. See [INSTALLATION.md](INSTALLATION.md) for the full walkthr
 
 ```bash
 trace --version
-# TRACE, version 1.0.1
+# TRACE, version 1.1.0
 ```
 
 ### Dependencies
@@ -447,7 +447,7 @@ Equivalent to `trace discover` with a summary count. Useful for rapid triage whe
 
 ## 6. Collectors — What TRACE Collects
 
-TRACE ships with **27 collectors** spanning local inference engines, agent
+TRACE ships with **52 collectors** spanning local inference engines, agent
 frameworks, AI development tools, and live network/container/browser AI.
 
 ### Artifact Types
@@ -920,7 +920,7 @@ Structured JSON output following the TRACE JSON schema v1.0.0. Suitable for SIEM
 {
   "schema_version": "1.0.0",
   "tool": "TRACE",
-  "tool_version": "1.0.1",
+  "tool_version": "1.1.0",
   "report_id": "uuid",
   "generated_at": "ISO-8601",
   "evidence_dir": "/path/to/evidence",
@@ -1055,7 +1055,7 @@ The `CHAIN_OF_CUSTODY.json` manifest records:
 ```json
 {
   "tool": "TRACE",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "collected_at": "2026-08-13T14:30:00+00:00",
   "total_files": 144,
   "files": [
@@ -1067,7 +1067,7 @@ The `CHAIN_OF_CUSTODY.json` manifest records:
       "size_bytes": 234,
       "sha256": "e3b0c44298fc1c14...",
       "collected_at": "2026-08-13T14:30:01+00:00",
-      "collector_version": "1.0.1"
+      "collector_version": "1.1.0"
     }
   ]
 }

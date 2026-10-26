@@ -34,7 +34,7 @@ class JSONReportGenerator:
     """Generate a structured JSON report from the chain-of-custody evidence directory."""
 
     SCHEMA_VERSION = "2.0.0"
-    TOOL_VERSION = "1.0.1"
+    TOOL_VERSION = "1.1.0"
 
     def __init__(self, evidence_dir: str):
         self.evidence_dir = Path(evidence_dir)

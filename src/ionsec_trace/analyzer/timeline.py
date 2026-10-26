@@ -35,7 +35,7 @@ def _row_get(row: sqlite3.Row, key: str, default=None):
     return default if value is None else value
 
 
-from ionsec_trace.collector.base import Severity
+from ionsec_trace.collector.base import Severity  # noqa: E402 - post-helper import
 
 # ---------------------------------------------------------------------------
 # DFIR content patterns for severity inference

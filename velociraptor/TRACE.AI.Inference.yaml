@@ -4,7 +4,7 @@ description: |
   engines (Ollama, LM Studio, llama.cpp, GPT4All, text-generation-webui,
   KoboldCpp, LocalAI, vLLM, Jan, AnythingLLM).
 
-  Version: 1.0.1
+  Version: 1.1.0
   
 
   This artifact collects:

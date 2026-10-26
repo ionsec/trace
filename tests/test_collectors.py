@@ -62,7 +62,7 @@ class TestBaseDataClasses:
         assert cf.original_path == "/tmp/test.json"
         assert cf.platform == "ollama"
         assert cf.size_bytes == 128
-        assert cf.collector_version == "1.0.1"
+        assert cf.collector_version == "1.1.0"
 
     def test_collected_file_to_dict(self):
         cf = CollectedFile(
@@ -203,6 +203,14 @@ class TestMockCollectorAPI:
     def test_safe_read_file_missing(self, mock_collector):
         result = mock_collector.safe_read_file("/nonexistent/path/file.txt")
         assert result is None
+
+
+@pytest.fixture(autouse=True)
+def _isolate_real_home(tmp_path, monkeypatch):
+    """Never scan the test machine's real home: runners may hold unreadable dirs."""
+    from ionsec_trace.collector.base import BaseCollector
+    monkeypatch.setattr(BaseCollector, "get_user_home_dirs", lambda self: [tmp_path])
+    yield
 
 
 class TestCollectorImports:

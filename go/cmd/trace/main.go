@@ -31,7 +31,7 @@ import (
 	"github.com/ionsec/trace/go/internal/ui"
 )
 
-const version = "1.0.1"
+const version = "1.1.0"
 
 // brandColors maps the TRACE brand accent to the banner.
 const (

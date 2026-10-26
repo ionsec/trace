@@ -1,0 +1,437 @@
+name: TRACE.AI.CodingAgents
+description: |
+  TRACE — Collect forensic artifacts from AI coding agents and CLIs
+  (Codex CLI, Gemini CLI, OpenCode, Cline/Roo, GitHub Copilot, Warp, Goose,
+  Kiro, Amazon Q, Zed, pi family, Kimi Code, Qwen Code, Continue, Augment,
+  Grok, Amp, Kilo Code).
+
+  Version: 1.0.2
+
+  This artifact collects:
+  - Agent config, credential stores and MCP client config
+  - Conversation/session transcripts (JSONL, JSON, SQLite)
+  - Process detection for running agent CLIs
+
+  Paths match the Python collectors in src/ionsec_trace/collector/ and the
+  Go catalog in go/internal/catalog/. Home-relative paths resolve on Linux,
+  macOS and Windows via expand(path="~").
+
+type: CLIENT
+parameters:
+  - name: CollectChatHistory
+    description: Collect conversation/transcript stores (may contain PII)
+    type: bool
+    default: true
+  - name: CollectCredentials
+    description: Enumerate credential stores (hashes only; contents not exported)
+    type: bool
+    default: true
+  - name: DeepCollection
+    description: Include archived sessions, logs and caches (large)
+    type: bool
+    default: false
+
+sources:
+  - name: CodexCLI
+    query: |
+      LET root = expand(path="~/.codex")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "codex_cli" AS Platform
+        FROM glob(globs=[root + "/config.toml", root + "/history.jsonl"], accessor="file")
+
+      LET creds = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                         "credential" AS ArtifactType, "codex_cli" AS Platform
+        FROM glob(globs=[root + "/auth.json"], accessor="file")
+        WHERE CollectCredentials
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "codex_cli" AS Platform
+        FROM glob(globs=[root + "/sessions/**/*.jsonl", root + "/sessions/**/*.zst"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET archived = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session_archive" AS ArtifactType, "codex_cli" AS Platform
+        FROM glob(globs=[root + "/archived_sessions/**"], accessor="file")
+        WHERE DeepCollection
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "codex_cli" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)codex"
+
+      SELECT * FROM chain(a=cfg, b=creds, c=sessions, d=archived, e=proc)
+
+  - name: GeminiCLI
+    query: |
+      LET root = expand(path="~/.gemini")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "gemini_cli" AS Platform
+        FROM glob(globs=[
+            root + "/settings.json",
+            root + "/projects.json",
+            root + "/mcp-server-enablement.json",
+        ], accessor="file")
+
+      LET creds = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                         "credential" AS ArtifactType, "gemini_cli" AS Platform
+        FROM glob(globs=[root + "/mcp-oauth-tokens.json"], accessor="file")
+        WHERE CollectCredentials
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "gemini_cli" AS Platform
+        FROM glob(globs=[root + "/tmp/**/chats/*.json", root + "/tmp/**/chats/*.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "gemini_cli" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)gemini"
+
+      SELECT * FROM chain(a=cfg, b=creds, c=sessions, d=proc)
+
+  - name: OpenCode
+    query: |
+      LET root = expand(path="~/.local/share/opencode")
+      LET conf = expand(path="~/.config/opencode")
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "opencode" AS Platform
+        FROM glob(globs=[root + "/opencode.db", root + "/opencode.db-wal"], accessor="file")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "opencode" AS Platform
+        FROM glob(globs=[conf + "/opencode.json"], accessor="file")
+
+      LET creds = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                         "credential" AS ArtifactType, "opencode" AS Platform
+        FROM glob(globs=[root + "/auth.json"], accessor="file")
+        WHERE CollectCredentials
+
+      LET diffs = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                         "session_diff" AS ArtifactType, "opencode" AS Platform
+        FROM glob(globs=[root + "/storage/session_diff/*.json"], accessor="file")
+        WHERE DeepCollection
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "opencode" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)opencode"
+
+      SELECT * FROM chain(a=db, b=cfg, c=creds, d=diffs, e=proc)
+
+  - name: Cline
+    query: |
+      LET modern = expand(path="~/.cline/data/sessions")
+      LET mac_gs = expand(path="~/Library/Application Support/Code/User/globalStorage")
+      LET lin_gs = expand(path="~/.config/Code/User/globalStorage")
+
+      LET sessions_new = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                                "session_modern" AS ArtifactType, "cline" AS Platform
+        FROM glob(globs=[modern + "/**/*.messages.json"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET sessions_legacy = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                                   "session_legacy" AS ArtifactType, "cline" AS Platform
+        FROM glob(globs=[
+            mac_gs + "/saoudrizwan.claude-dev/tasks/**",
+            lin_gs + "/saoudrizwan.claude-dev/tasks/**",
+            mac_gs + "/rooveterinaryinc.roo-cline/tasks/**",
+            lin_gs + "/rooveterinaryinc.roo-cline/tasks/**",
+            expand(path="~/.vscode-mock/global-storage/tasks/**"),
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      LET mcp = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "mcp_config" AS ArtifactType, "cline" AS Platform
+        FROM glob(globs=[
+            expand(path="~/.cline/mcp.json"),
+            expand(path="~/.cline/data/settings/cline_mcp_settings.json"),
+        ], accessor="file")
+
+      SELECT * FROM chain(a=sessions_new, b=sessions_legacy, c=mcp)
+
+  - name: Copilot
+    query: |
+      LET root = expand(path="~/.copilot")
+      LET mac_gs = expand(path="~/Library/Application Support/Code/User/globalStorage")
+      LET lin_gs = expand(path="~/.config/Code/User/globalStorage")
+
+      LET events = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                          "session" AS ArtifactType, "copilot" AS Platform
+        FROM glob(globs=[root + "/session-state/*/events.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "copilot" AS Platform
+        FROM glob(globs=[root + "/mcp-config.json", root + "/config.json"], accessor="file")
+
+      LET chat = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                        "chat" AS ArtifactType, "copilot" AS Platform
+        FROM glob(globs=[
+            mac_gs + "/github.copilot-chat/chat.json",
+            mac_gs + "/github.copilot-chat/state.vscdb",
+            lin_gs + "/github.copilot-chat/chat.json",
+            lin_gs + "/github.copilot-chat/state.vscdb",
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "copilot" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)copilot"
+
+      SELECT * FROM chain(a=events, b=cfg, c=chat, d=proc)
+
+  - name: Warp
+    query: |
+      LET root = expand(path="~/.warp")
+      LET mac_db = expand(path="~/Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable")
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "terminal_db" AS ArtifactType, "warp" AS Platform
+        FROM glob(globs=[root + "/warp.sqlite", mac_db + "/warp.sqlite"], accessor="file")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "warp" AS Platform
+        FROM glob(globs=[root + "/settings.toml", root + "/.mcp.json"], accessor="file")
+
+      LET workflows = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                             "workflow" AS ArtifactType, "warp" AS Platform
+        FROM glob(globs=[root + "/workflows/**", root + "/skills/**"], accessor="file")
+        WHERE DeepCollection
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "warp" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)warp"
+
+      SELECT * FROM chain(a=db, b=cfg, c=workflows, d=proc)
+
+  - name: Goose
+    query: |
+      LET cfg_root = expand(path="~/.config/goose")
+      LET data_root = expand(path="~/.local/share/goose/sessions")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "goose" AS Platform
+        FROM glob(globs=[
+            cfg_root + "/profiles.yaml",
+            cfg_root + "/config.yaml",
+            cfg_root + "/history.txt",
+        ], accessor="file")
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "goose" AS Platform
+        FROM glob(globs=[data_root + "/sessions.db"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET legacy = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                          "session_legacy" AS ArtifactType, "goose" AS Platform
+        FROM glob(globs=[data_root + "/*.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "goose" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)goose"
+
+      SELECT * FROM chain(a=cfg, b=db, c=legacy, d=proc)
+
+  - name: Kiro
+    query: |
+      LET root = expand(path="~/.kiro")
+
+      LET mcp = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "kiro" AS Platform
+        FROM glob(globs=[root + "/settings/mcp.json"], accessor="file")
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "kiro" AS Platform
+        FROM glob(globs=[root + "/sessions/**/*.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "kiro" AS Platform
+        FROM glob(globs=[
+            expand(path="~/.local/share/kiro-cli/data.sqlite3"),
+            expand(path="~/Library/Application Support/kiro-cli/data.sqlite3"),
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "kiro" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)kiro"
+
+      SELECT * FROM chain(a=mcp, b=sessions, c=db, d=proc)
+
+  - name: AmazonQ
+    query: |
+      LET hist = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                        "chat_history" AS ArtifactType, "amazon_q" AS Platform
+        FROM glob(globs=[expand(path="~/.aws/amazonq/history/chat-history-*.json")], accessor="file")
+        WHERE CollectChatHistory
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "amazon_q" AS Platform
+        FROM glob(globs=[expand(path="~/.local/share/amazon-q/data.sqlite3")], accessor="file")
+        WHERE CollectChatHistory
+
+      SELECT * FROM chain(a=hist, b=db)
+
+  - name: Zed
+    query: |
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "threads_db" AS ArtifactType, "zed" AS Platform
+        FROM glob(globs=[
+            expand(path="~/Library/Application Support/Zed/threads/threads.db"),
+            expand(path="~/.local/share/zed/threads/threads.db"),
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      LET legacy = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                          "conversation_legacy" AS ArtifactType, "zed" AS Platform
+        FROM glob(globs=[expand(path="~/.local/share/zed/conversations/*.json")], accessor="file")
+        WHERE DeepCollection
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "zed" AS Platform
+        FROM glob(globs=[expand(path="~/.config/zed/settings.json")], accessor="file")
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "zed" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)zed"
+
+      SELECT * FROM chain(a=db, b=legacy, c=cfg, d=proc)
+
+  - name: PiFamily
+    query: |
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "pi_family" AS Platform,
+                            "pi" AS Tool
+        FROM glob(globs=[
+            expand(path="~/.pi/agent/sessions/**/*.jsonl"),
+            expand(path="~/.omp/agent/sessions/**/*.jsonl"),
+            expand(path="~/.senpi/agent/sessions/**/*.jsonl"),
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      LET minimax = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                           "session" AS ArtifactType, "pi_family" AS Platform,
+                           "minimax" AS Tool
+        FROM glob(globs=[expand(path="~/.minimax/v2/sessions/**/messages.jsonl")], accessor="file")
+        WHERE CollectChatHistory
+
+      SELECT * FROM chain(a=sessions, b=minimax)
+
+  - name: KimiCode
+    query: |
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "kimi_code" AS Platform
+        FROM glob(globs=[expand(path="~/.kimi-code/sessions/**/wire.jsonl")], accessor="file")
+        WHERE CollectChatHistory
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "kimi_code" AS Platform
+        FROM glob(globs=[expand(path="~/.kimi/config.toml")], accessor="file")
+
+      SELECT * FROM chain(a=sessions, b=cfg)
+
+  - name: QwenCode
+    query: |
+      SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+             "config" AS ArtifactType, "qwen_code" AS Platform
+        FROM glob(globs=[expand(path="~/.qwen/settings.json")], accessor="file")
+
+  - name: ContinueDev
+    query: |
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "continue" AS Platform
+        FROM glob(globs=[
+            expand(path="~/.continue/config.yaml"),
+            expand(path="~/.continue/config.json"),
+        ], accessor="file")
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "continue" AS Platform
+        FROM glob(globs=[expand(path="~/.continue/sessions/*.json")], accessor="file")
+        WHERE CollectChatHistory
+
+      LET mcp = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "mcp_config" AS ArtifactType, "continue" AS Platform
+        FROM glob(globs=[expand(path="~/.continue/mcpServers/*.json")], accessor="file")
+
+      SELECT * FROM chain(a=cfg, b=sessions, c=mcp)
+
+  - name: Augment
+    query: |
+      LET root = expand(path="~/.augment")
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "augment" AS Platform
+        FROM glob(globs=[root + "/sessions/*.json"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET hist = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                        "history" AS ArtifactType, "augment" AS Platform
+        FROM glob(globs=[root + "/prompt-history.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "augment" AS Platform
+        FROM glob(globs=[root + "/settings.json"], accessor="file")
+
+      SELECT * FROM chain(a=sessions, b=hist, c=cfg)
+
+  - name: Grok
+    query: |
+      LET root = expand(path="~/.grok")
+
+      LET sessions = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                            "session" AS ArtifactType, "grok" AS Platform
+        FROM glob(globs=[root + "/sessions/**/updates.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "grok" AS Platform
+        FROM glob(globs=[root + "/grok.db"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "grok" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)grok"
+
+      SELECT * FROM chain(a=sessions, b=db, c=proc)
+
+  - name: Amp
+    query: |
+      LET threads = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                           "thread" AS ArtifactType, "amp" AS Platform
+        FROM glob(globs=[expand(path="~/.local/share/amp/threads/*.json")], accessor="file")
+        WHERE CollectChatHistory
+
+      SELECT * FROM threads
+
+  - name: KiloCode
+    query: |
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "kilo" AS Platform
+        FROM glob(globs=[expand(path="~/.local/share/kilo/kilo.db")], accessor="file")
+        WHERE CollectChatHistory
+
+      LET mac_gs = expand(path="~/Library/Application Support/Code/User/globalStorage")
+      LET lin_gs = expand(path="~/.config/Code/User/globalStorage")
+
+      LET legacy = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                          "session_legacy" AS ArtifactType, "kilo" AS Platform
+        FROM glob(globs=[
+            mac_gs + "/kilocode.kilo-code/tasks/**",
+            lin_gs + "/kilocode.kilo-code/tasks/**",
+        ], accessor="file")
+        WHERE CollectChatHistory
+
+      SELECT * FROM chain(a=db, b=legacy)

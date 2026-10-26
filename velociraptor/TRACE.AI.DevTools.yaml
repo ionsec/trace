@@ -3,7 +3,7 @@ description: |
   TRACE — Collect forensic artifacts from AI developer tools
   (Cursor, Claude Code, Codex CLI, Continue, Cline, Warp, GitHub Copilot, Jupyter AI).
 
-  Version: 1.0.1
+  Version: 1.1.0
   
 
   This artifact collects:

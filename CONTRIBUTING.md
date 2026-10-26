@@ -33,6 +33,24 @@ pip install -e ".[dev]"
 
 The `[dev]` extra installs `pytest`, `pytest-cov`, and `ruff`. If you prefer `uv`, `uv sync --extra dev` works as well.
 
+## Running the Test Suite
+
+```bash
+# Python: unit tests with coverage (branch coverage; gate is 50%)
+python -m pytest -q --cov=ionsec_trace --cov-report=term-missing
+
+# Lint
+ruff check src tests
+
+# Go: build, vet, tests with per-package coverage
+cd go && go build ./... && go vet ./... && go test ./... -cover
+```
+
+CI runs exactly these commands on every push to `main` and every PR
+(`.github/workflows/test.yml`). New collectors must ship with tests at 70% or
+better module coverage; tests must never scan the real home directory — point
+the collector at `tmp_path` instead.
+
 ## Adding a New Collector
 
 1. Create a new file in `src/ionsec_trace/collector/your_platform.py`
@@ -43,7 +61,10 @@ The `[dev]` extra installs `pytest`, `pytest-cov`, and `ruff`. If you prefer `uv
 3. Register the collector in `src/ionsec_trace/collector/__init__.py`:
    - Add an import at the top (e.g. `from ionsec_trace.collector.your_platform import YourPlatformCollector`)
    - Append the class to the `ALL_COLLECTORS` list
-4. Add tests in `tests/test_collectors.py`
+4. Add a dedicated test file `tests/test_<platform>_collector.py` (>= 70% module
+   coverage), register the platform in `go/internal/catalog/catalog.go`
+   `Platforms`, and add its paths to the matching `velociraptor/TRACE.AI.*.yaml`
+   artifact so Python, Go and Velociraptor stay in parity.
 
 ### Collector Template
 
@@ -56,7 +77,7 @@ from ionsec_trace.collector.base import (
 class MyCollector(BaseCollector):
     PLATFORM_NAME = "my_platform"
     PLATFORM_CATEGORY = PlatformCategory.INFERENCE  # or AGENT, DEVTOOL, CLOUD
-    VERSION = "1.0.1"
+    VERSION = "1.1.0"
     PROCESS_NAMES = ["my_platform"]
     SERVICE_PORTS = [8080]
 

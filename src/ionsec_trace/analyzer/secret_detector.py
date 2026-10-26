@@ -425,7 +425,7 @@ def shannon_entropy(s: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Path confidence 
+# Path confidence
 # ---------------------------------------------------------------------------
 
 _NOISE_DIR_FRAGMENTS = [
@@ -583,7 +583,7 @@ def _rhs_is_non_literal(val: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Context-layer pattern 
+# Context-layer pattern
 # ---------------------------------------------------------------------------
 
 _CONTEXT_PATTERN = re.compile(
@@ -603,7 +603,7 @@ _CONTEXT_ENTROPY_FLOOR = 3.25
 
 
 # ---------------------------------------------------------------------------
-# Allowlist 
+# Allowlist
 # ---------------------------------------------------------------------------
 
 # Paths that are never scanned for secrets (lockfiles, vendor, images, etc.)
@@ -620,7 +620,7 @@ _ALLOWLIST_PATH_PATTERNS = [
     re.compile(r"(?:^|/)\.git$"),
 ]
 
-# Regexes that match placeholder / non-secret values 
+# Regexes that match placeholder / non-secret values
 _ALLOWLIST_REGEXES = [
     re.compile(r"(?i)^true|false|null$"),
     re.compile(r"^(?i:a+|b+|c+|d+|e+|f+|g+|h+|i+|j+|k+|l+|m+|n+|o+|p+|q+|r+|s+|t+|u+|v+|w+|x+|y+|z+|\*+|\.+)$"),

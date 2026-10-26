@@ -153,7 +153,7 @@ func TestGenerateHTMLRendersEveryTab(t *testing.T) {
 	// Evidence content must actually reach the page, not just its headings.
 	for _, want := range []string{
 		"Jailbreak attempt", "api.anthropic.com", "T1552", "Rotate exposed API keys",
-		"conic-gradient", "claude_code",
+		"radial-svg", "stroke-dasharray", "claude_code",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("html missing content %q", want)

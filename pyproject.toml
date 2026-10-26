@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ionsec-trace"
-version = "1.0.1"
+version = "1.1.0"
 description = "TRACE — Tool for Reconnaissance of AI & Compute Evidence"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -86,6 +86,10 @@ ignore = [
     "S108", "S104",
     # False positive: keyword-arg name, not a hardcoded password.
     "S106",
+    # Intentional: report ring charts are built server-side from controlled
+    # integers and palette constants, never untrusted input; Markup marks the
+    # assembled SVG as trusted HTML.
+    "S704",
     # Intentional: STIX/JSON report strings are long by nature.
     "E501",
     # Intentional: forensic thresholds and severity cutoffs are magic values.
@@ -104,3 +108,20 @@ ignore = [
 # Security/bandit rules (S) and magic-value checks (PLR2004) are for
 # production code only — tests legitimately use assert, random, and /tmp.
 "tests/*" = ["S101", "S108", "S311", "PLR2004"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["ionsec_trace"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 50
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

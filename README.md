@@ -36,6 +36,14 @@ $ trace discover
 
 ---
 
+## Watch the explainer
+
+[![Watch the TRACE explainer](site/video/trace-explainer-poster.png)](site/video/trace-explainer.mp4)
+
+*52 seconds: discovery, acquisition, analysis and the report, on a live endpoint.*
+
+---
+
 **Developed by [TRACE](https://github.com/ionsec/trace)**
 
 > **USE AT YOUR OWN RISK.** TRACE is provided **as is, without warranty of any kind**,
@@ -51,14 +59,14 @@ $ trace discover
 
 ## Features
 
-- **27 Collectors** — DeepSeek Harness (dsh), Ollama, Hermes, LM Studio, GPT4All, text-generation-webui, llama.cpp, KoboldCpp, AutoGPT, CrewAI, Aider, Shell-GPT, Cursor, Claude Code, HuggingFace, LiteLLM, Bifrost, Unsloth, Antigravity, Devin, VSCodium, Eigent + the Shadow AI meta-collector, the Network AI collector (live process→domain AI traffic), the Code Scanner collector (AI framework imports, MCP configs, hardcoded API keys), the Docker AI collector (Gordon + hosted LLM images/containers), and the Browser AI collector (Brave Leo, Perplexity, Copilot, ChatGPT, Gemini web)
+- **52 Collectors** — DeepSeek Harness (dsh), Ollama, Hermes, LM Studio, GPT4All, text-generation-webui, llama.cpp, KoboldCpp, AutoGPT, CrewAI, Aider, Shell-GPT, Cursor, Claude Code, HuggingFace, LiteLLM, Bifrost, Unsloth, Antigravity, Devin, VSCodium, Eigent, Codex CLI, Gemini CLI, OpenCode, Cline/Roo Code, GitHub Copilot (CLI + VS Code Chat), Warp, Goose, Kiro, Amazon Q, Zed, the pi family (pi/MiniMax/omp/senpi), Kimi Code, Qwen Code, Continue, Augment, Grok, Amp, Kilo, Jan, AnythingLLM, LocalAI, Open WebUI, vLLM, Lemonade, desktop chat apps (ChatGPT/Claude) + the Shadow AI meta-collector, the Network AI collector (live process→domain AI traffic), the Code Scanner collector (AI framework imports, MCP configs, hardcoded API keys), the Docker AI collector (Gordon + hosted LLM images/containers), and the Browser AI collector (Brave Leo, Perplexity, Copilot, ChatGPT, Gemini web)
 - **Live Network AI Detection** — correlates running processes with outbound connections and classifies destination domains against a catalog of 100+ AI providers (OpenAI, Anthropic, Gemini, Bedrock, etc.)
 - **Source-Code AI Scanning** — detects AI framework imports (LangChain, CrewAI, AutoGen, 80+ others), MCP server registrations, and hardcoded API keys in code
 - **Docker AI Detection** — detects Docker's AI assistant (Gordon) and hosted LLM workloads (ollama, LocalAI, vLLM, OpenWebUI, etc.) in containers and the model registry
 - **Browser AI Forensics** — captures browser-based AI assistant evidence (Brave Leo, Perplexity, Microsoft Copilot, ChatGPT, Claude, Gemini web) from browser history and per-site conversation stores
 - **Full Analyzer Set** — Unified Timeline, IOC Extractor, MITRE ATLAS Mapper, Risk Scorer, AI-specific IOC Detector, Enhanced Risk Scorer, and Conversation Parser
 - **3 Report Formats** — Interactive HTML (attack-surface map, charts, stats), JSON, STIX 2.1
-- **15 Velociraptor Artifacts** — Deploy to fleet endpoints via Velociraptor server
+- **17 Velociraptor Artifacts** — Deploy to fleet endpoints via Velociraptor server
 - **Forensically Sound** — Read-only collection, SHA-256 per file, chain of custody manifest, UTC timestamps
 - **Cross-Platform** — Linux, macOS, Windows paths per collector
 
@@ -144,7 +152,7 @@ conversation stores but does not parse them.
 
 | Capability | Python CLI | Go binary |
 |---|---|---|
-| Platform catalog (27 platforms, 47 shadow-AI tools) | ✅ | ✅ |
+| Platform catalog (49 platforms, 47 shadow-AI tools) | ✅ | ✅ |
 | Curated collection + chain of custody | ✅ | ✅ |
 | IOC extraction (IPs, URLs, domains, hashes, paths, commands, exfil patterns) | ✅ | ✅ |
 | Secret detection (103 rules, entropy gating, allowlists) | ✅ | ✅ |
@@ -219,7 +227,7 @@ Every collection produces a `CHAIN_OF_CUSTODY.json` containing:
 ```json
 {
   "tool": "TRACE",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "collected_at": "2026-08-13T08:56:55Z",
   "total_files": 144,
   "files": [
@@ -371,13 +379,15 @@ The HTML report is a self-contained, interactive forensic report (no CDN depende
 
 ## Velociraptor Artifacts
 
-15 artifacts for fleet deployment (all validated with `velociraptor artifacts verify`):
+17 artifacts for fleet deployment (all validated with `velociraptor artifacts verify`):
 
 | Artifact | Description |
 |----------|-------------|
-| `TRACE.AI.Inference` | Ollama, LM Studio, GPT4All, text-gen-webui, llama.cpp, KoboldCpp, LiteLLM, Bifrost, Unsloth |
-| `TRACE.AI.Agents` | Hermes, AutoGPT, CrewAI, Aider, Shell-GPT, Devin, Eigent |
-| `TRACE.AI.DevTools` | Cursor, Claude Code, Codex, Continue, Cline, Warp, Antigravity, VSCodium |
+| `TRACE.AI.Inference` | Ollama, LM Studio, GPT4All, text-gen-webui, llama.cpp, KoboldCpp, LiteLLM, Bifrost, Unsloth, Jan, AnythingLLM, LocalAI, Open WebUI, vLLM, Lemonade |
+| `TRACE.AI.Agents` | Hermes, AutoGPT, CrewAI, Aider, Shell-GPT, Devin, Eigent, Goose, Kiro, Amazon Q, pi family, Kimi Code, Qwen Code, Continue, Augment, Grok, Amp, Kilo |
+| `TRACE.AI.DevTools` | Cursor, Claude Code, Codex CLI, Gemini CLI, OpenCode, Cline/Roo, Copilot, Warp, Zed, Antigravity, VSCodium |
+| `TRACE.AI.CodingAgents` | Per-platform sources for Codex CLI, Gemini CLI, OpenCode, Cline/Roo, Copilot, Warp, Goose, Kiro, Amazon Q, Zed, pi family, Kimi Code, Qwen Code, Continue, Augment, Grok, Amp, Kilo |
+| `TRACE.AI.LocalApps` | Jan, AnythingLLM, LocalAI, Open WebUI, vLLM, Lemonade |
 | `TRACE.AI.APIKeys` | Credential scanner across all platforms |
 | `TRACE.AI.HuggingFace` | HuggingFace Hub cache, models, tokens |
 | `TRACE.AI.Network` | AI service port detection, DNS cache |

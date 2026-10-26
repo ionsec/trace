@@ -51,6 +51,15 @@ FORENSIC_TOOL_PLAN.md
 # Generated site docs (built from docs/*.md by site/build_docs.py)
 site/docs/
 
+# Agent tooling (local Claude setups, binary assets — never public)
+.claude/
+.github/agents/
+.github/hooks/
+.github/skills/
+
+# Host-specific measured evidence (internal gap input, not documentation)
+docs/evidence-coverage-analysis.md
+
 # Databases
 *.db
 *.sqlite

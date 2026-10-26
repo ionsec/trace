@@ -135,6 +135,39 @@ class CodeScannerCollector(BaseCollector):
         # Check for hardcoded API keys
         return bool(self._secret_detector.scan(content, file_path))
 
+    def _load_mcp_config(self, path: str) -> dict | None:
+        """Load an MCP client config across JSON, TOML and YAML dialects.
+
+        Codex is the only major client using TOML ([mcp_servers.<name>]);
+        smithery.yaml is a registry publishing manifest. Returns None when the
+        file is unreadable or carries no MCP content.
+        """
+        if path.endswith(".toml"):
+            content = self.safe_read_file(path)
+            if not content or "[mcp_servers" not in content:
+                return None
+            try:
+                import tomllib
+            except ModuleNotFoundError:  # Python 3.10 fallback
+                return {"format": "toml", "has_mcp_servers": True}
+            try:
+                with open(path, "rb") as f:
+                    data = tomllib.load(f)
+            except (OSError, ValueError):
+                return None
+            servers = data.get("mcp_servers")
+            if isinstance(servers, dict):
+                return {"format": "toml", "mcp_servers": sorted(servers.keys())}
+            return None
+        if path.endswith((".yaml", ".yml")):
+            content = self.safe_read_file(path)
+            if not content:
+                return None
+            if path.endswith("smithery.yaml"):
+                return {"format": "smithery", "kind": "mcp_server_manifest"}
+            return {"format": "yaml", "has_mcp": "mcp" in content.lower()}
+        return self.safe_read_json(path)
+
     def parse(self) -> list[ParsedArtifact]:
         """Parse collected code files into AI framework / credential findings."""
         artifacts = []
@@ -143,8 +176,8 @@ class CodeScannerCollector(BaseCollector):
 
         for cf in self.collected_files:
             if cf.artifact_type == "mcp_config":
-                data = self.safe_read_json(cf.original_path)
-                if data:
+                data = self._load_mcp_config(cf.original_path)
+                if data is not None:
                     artifacts.append(ParsedArtifact(
                         platform=self.PLATFORM_NAME,
                         artifact_type="mcp_config",

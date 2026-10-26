@@ -10,7 +10,7 @@ description: |
   - Per-site IndexedDB conversation stores (https_<ai-domain>_0.indexeddb.*)
   - Brave Leo built-in assistant data (AIChat/ dir)
 
-  Version: 1.0.1
+  Version: 1.1.0
   
   Reference: https://github.com/ionsec/trace
   License: AGPL-3.0-or-later

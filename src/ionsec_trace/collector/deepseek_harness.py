@@ -94,10 +94,7 @@ class DeepSeekHarnessCollector(BaseCollector):
 
     def discover(self) -> bool:
         """Detect whether the DeepSeek Harness is installed or has been used."""
-        for harness_home in self._harness_homes():
-            if harness_home.exists():
-                return True
-        return False
+        return any(harness_home.exists() for harness_home in self._harness_homes())
 
     # ------------------------------------------------------------------
     # Collection

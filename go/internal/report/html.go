@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,7 +22,7 @@ var reportTemplate string
 var reportCSS string
 
 // toolVersion is the TRACE release this binary belongs to.
-const toolVersion = "1.0.1"
+const toolVersion = "1.1.0"
 
 // sevColors maps a severity to the TRACE palette, kept in sync with the
 // Python reporter's SEV_COLORS.
@@ -171,7 +172,8 @@ type reportView struct {
 	Platforms      []string
 	SeverityBadges []keyed
 	SeverityBars   []bar
-	DonutGradient  template.CSS
+	GaugeSVG       template.HTML
+	DonutSVG       template.HTML
 	IOCBars        []bar
 	PlatformBars   []bar
 	TimelineBars   []bar
@@ -322,7 +324,8 @@ func buildView(evidenceDir string, coc model.ChainOfCustody, analysis model.Anal
 	for _, sev := range severityOrder {
 		view.SeverityBars = append(view.SeverityBars, makeBar(title(sev), severityCounts[sev], sevMax, sevColor(sev), ""))
 	}
-	view.DonutGradient = template.CSS(donutGradient(severityCounts))
+	view.GaugeSVG = gaugeSVG(risk, view.RiskColor)
+	view.DonutSVG = donutSVG(severityCounts)
 
 	view.IOCSummary = iocSummary(analysis.IOCs)
 	iocMax := 1
@@ -533,8 +536,29 @@ func makeBar(label string, value, max int, color, display string) bar {
 	return bar{Label: label, Value: shown, Pct: fmt.Sprintf("%d%%", pct), Color: color}
 }
 
-// donutGradient builds the conic-gradient stops for the severity donut.
-func donutGradient(counts map[string]int) string {
+// gaugeRingR/donutRingR — ring radii for the SVG charts (viewBox 150;
+// strokes 8 and 10 keep the centres at 14px/25px hole insets).
+const gaugeRingR = 65.0
+const donutRingR = 55.0
+
+// gaugeSVG renders the risk score as one SVG arc starting at 12 o'clock.
+// Thin strokes and flat colours: crisp in print, no gradients.
+func gaugeSVG(risk int, color string) template.HTML {
+	circ := 2 * math.Pi * gaugeRingR
+	dash := circ * float64(risk) / 100
+	if dash < 0 {
+		dash = 0
+	}
+	return template.HTML(fmt.Sprintf(
+		`<svg class="radial-svg" viewBox="0 0 150 150" role="img" aria-label="Risk score %d of 100">`+
+			`<circle cx="75" cy="75" r="65" fill="none" stroke="#2a2a3e" stroke-width="8"/>`+
+			`<circle cx="75" cy="75" r="65" fill="none" stroke="%s" stroke-width="8" stroke-dasharray="%.2f %.2f" transform="rotate(-90 75 75)"/>`+
+			`</svg>`, risk, color, dash, circ-dash))
+}
+
+// donutSVG renders the severity distribution as arc segments separated by
+// 1px seams, in the same order as the severity bars.
+func donutSVG(counts map[string]int) template.HTML {
 	total := 0
 	for _, sev := range severityOrder {
 		total += counts[sev]
@@ -542,18 +566,28 @@ func donutGradient(counts map[string]int) string {
 	if total == 0 {
 		return ""
 	}
-	var stops []string
+	circ := 2 * math.Pi * donutRingR
+	var arcs []string
 	cursor := 0.0
 	for _, sev := range severityOrder {
 		n := counts[sev]
 		if n == 0 {
 			continue
 		}
-		end := cursor + float64(n)/float64(total)*100
-		stops = append(stops, fmt.Sprintf("%s %.4g%% %.4g%%", sevColor(sev), cursor, end))
-		cursor = end
+		span := float64(n) / float64(total) * circ
+		dash := span - 1
+		if dash < 0.5 {
+			dash = 0.5
+		}
+		arcs = append(arcs, fmt.Sprintf(
+			`<circle cx="75" cy="75" r="55" fill="none" stroke="%s" stroke-width="10" stroke-dasharray="%.2f %.2f" stroke-dashoffset="%.2f" transform="rotate(-90 75 75)"/>`,
+			sevColor(sev), dash, circ-dash, -(cursor+0.5)))
+		cursor += span
 	}
-	return "conic-gradient(" + strings.Join(stops, ", ") + ")"
+	return template.HTML(fmt.Sprintf(
+		`<svg class="radial-svg" viewBox="0 0 150 150" role="img" aria-label="Severity distribution across %d findings">`+
+			`<circle cx="75" cy="75" r="55" fill="none" stroke="#2a2a3e" stroke-width="10"/>`+
+			`%s</svg>`, total, strings.Join(arcs, "")))
 }
 
 // iocSummary counts indicators per type, most common first.

@@ -1,0 +1,164 @@
+name: TRACE.AI.LocalApps
+description: |
+  TRACE — Collect forensic artifacts from local AI desktop apps and
+  self-hosted inference servers (Jan, AnythingLLM, LocalAI, Open WebUI,
+  vLLM, Lemonade).
+
+  Version: 1.0.2
+
+  This artifact collects:
+  - Chat/session databases and per-thread stores
+  - Model and provider configuration, env files and credential stores
+  - Process detection for local inference servers
+
+  Paths match the Python collectors in src/ionsec_trace/collector/.
+
+type: CLIENT
+parameters:
+  - name: CollectChatHistory
+    description: Collect conversation/thread stores (may contain PII)
+    type: bool
+    default: true
+  - name: CollectCredentials
+    description: Enumerate credential stores (hashes only; contents not exported)
+    type: bool
+    default: true
+  - name: DeepCollection
+    description: Include model caches and logs (large)
+    type: bool
+    default: false
+
+sources:
+  - name: Jan
+    query: |
+      LET data_root = expand(path="~/.local/share/Jan/data")
+      LET mac_root = expand(path="~/Library/Application Support/Jan/data")
+
+      LET threads_linux = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                                 "thread" AS ArtifactType, "jan" AS Platform
+        FROM glob(globs=[data_root + "/threads/*/messages.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET threads_mac = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                               "thread" AS ArtifactType, "jan" AS Platform
+        FROM glob(globs=[mac_root + "/threads/*/messages.jsonl"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET meta = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                        "thread_meta" AS ArtifactType, "jan" AS Platform
+        FROM glob(globs=[data_root + "/threads/*/thread.json", mac_root + "/threads/*/thread.json"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "jan" AS Platform
+        FROM glob(globs=[data_root + "/store.json", mac_root + "/store.json"], accessor="file")
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "jan" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)^jan"
+
+      SELECT * FROM chain(a=threads_linux, b=threads_mac, c=meta, d=cfg, e=proc)
+
+  - name: AnythingLLM
+    query: |
+      LET lin_root = expand(path="~/.config/anythingllm-desktop/storage")
+      LET mac_root = expand(path="~/Library/Application Support/anythingllm-desktop/storage")
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "anythingllm" AS Platform
+        FROM glob(globs=[lin_root + "/anythingllm.db", mac_root + "/anythingllm.db"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "anythingllm" AS Platform
+        FROM glob(globs=[lin_root + "/config.json", mac_root + "/config.json"], accessor="file")
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "anythingllm" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)anythingllm"
+
+      SELECT * FROM chain(a=db, b=cfg, c=proc)
+
+  - name: LocalAI
+    query: |
+      LET root = expand(path="~/.localai")
+
+      LET models_cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                              "model_config" AS ArtifactType, "localai" AS Platform
+        FROM glob(globs=[root + "/models/*.yaml"], accessor="file")
+
+      LET keys = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                        "api_keys" AS ArtifactType, "localai" AS Platform
+        FROM glob(globs=[root + "/configuration/api_keys.json"], accessor="file")
+        WHERE CollectCredentials
+
+      LET env = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "env" AS ArtifactType, "localai" AS Platform
+        FROM glob(globs=[expand(path="~/.config/localai.env")], accessor="file")
+        WHERE CollectCredentials
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "localai" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)local-?ai"
+
+      SELECT * FROM chain(a=models_cfg, b=keys, c=env, d=proc)
+
+  - name: OpenWebUI
+    query: |
+      LET root = expand(path="~/.open-webui")
+
+      LET db = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                      "session_db" AS ArtifactType, "open_webui" AS Platform
+        FROM glob(globs=[root + "/webui.db"], accessor="file")
+        WHERE CollectChatHistory
+
+      LET secret = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                          "credential" AS ArtifactType, "open_webui" AS Platform
+        FROM glob(globs=[root + "/.webui_secret_key"], accessor="file")
+        WHERE CollectCredentials
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "open_webui" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)open-?webui"
+
+      SELECT * FROM chain(a=db, b=secret, c=proc)
+
+  - name: VLLM
+    query: |
+      LET root = expand(path="~/.config/vllm")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "vllm" AS Platform
+        FROM glob(globs=[root + "/**/*.json", root + "/**/*.yaml"], accessor="file")
+        WHERE DeepCollection
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "vllm" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)vllm"
+
+      SELECT * FROM chain(a=cfg, b=proc)
+
+  - name: Lemonade
+    query: |
+      LET user_root = expand(path="~/.config/lemonade")
+
+      LET cfg = SELECT FullPath, Mtime, Size, hash(path=FullPath) AS FileHash,
+                       "config" AS ArtifactType, "lemonade" AS Platform
+        FROM glob(globs=[
+            user_root + "/config.json",
+            user_root + "/user_models.json",
+            "/var/lib/lemonade/config.json",
+            "/var/lib/lemonade/user_models.json",
+        ], accessor="file")
+
+      LET proc = SELECT Name AS ProcessName, Pid, CommandLine, Exe,
+                        create_time AS CreateTime, "process" AS ArtifactType,
+                        "lemonade" AS Platform
+        FROM pslist() WHERE Name =~ "(?i)lemonade|lemond"
+
+      SELECT * FROM chain(a=cfg, b=proc)
