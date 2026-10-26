@@ -86,6 +86,10 @@ ignore = [
     "S108", "S104",
     # False positive: keyword-arg name, not a hardcoded password.
     "S106",
+    # Intentional: report ring charts are built server-side from controlled
+    # integers and palette constants, never untrusted input; Markup marks the
+    # assembled SVG as trusted HTML.
+    "S704",
     # Intentional: STIX/JSON report strings are long by nature.
     "E501",
     # Intentional: forensic thresholds and severity cutoffs are magic values.
